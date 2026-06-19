@@ -29,6 +29,19 @@ function humanize(id: string) {
   return id.replace(/-/g, " ");
 }
 
+/** SSR-safe media query hook (starts false, resolves on mount). */
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
 export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const [image, setImage] = useState<LoadedImage | null>(null);
   const [activeId, setActiveId] = useState(DEFAULT_SHADER_ID);
@@ -55,6 +68,13 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
 
   const shader = SHADERS_BY_ID[activeId];
   const values = valuesByShader[activeId] ?? initialValues(shader);
+  const ar = image ? image.w / image.h : 16 / 10;
+  const isWide = useMediaQuery("(min-width: 768px)");
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  // shorter pane on tablet (narrow canvas) to avoid vertical letterbox; full height on desktop
+  const paneHeight = isDesktop
+    ? "clamp(440px, 72vh, 760px)"
+    : "clamp(360px, 52vh, 520px)";
 
   const showDropPrompt = shader.takesImage && !image;
   const canCompare = shader.category === "image-filter" && !!image;
@@ -218,7 +238,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_50px_-30px_rgba(0,0,0,0.85)]">
       {/* Studio top bar */}
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-muted-foreground">
           <span className="size-1.5 rounded-full bg-muted-foreground" />
           <span className="truncate">
@@ -264,17 +284,22 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       </div>
 
       {/* Studio body */}
-      <div className="flex flex-col lg:flex-row">
+      <div className="flex flex-col md:flex-row">
         {/* Canvas area */}
         <div
-          className={`relative flex h-[44vh] min-h-[300px] items-center justify-center bg-[#070809] p-3 sm:p-6 lg:h-[640px] lg:flex-1 ${
+          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 md:flex-1 ${
             dragging ? "ring-2 ring-inset ring-foreground/30" : ""
           }`}
+          style={
+            isWide
+              ? { height: paneHeight }
+              : { aspectRatio: String(ar), maxHeight: "62vh", minHeight: 280 }
+          }
         >
           {showDropPrompt ? (
             <DropPrompt onPick={() => fileInput.current?.click()} onSample={loadSample} />
           ) : (
-            <PreviewBox ar={image ? image.w / image.h : 16 / 10}>
+            <PreviewBox ar={ar}>
               {showCompare ? (
                 <CompareSlider
                   beforeLabel="Original"
@@ -301,7 +326,10 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
         </div>
 
         {/* Control rail */}
-        <div className="border-t border-border lg:h-[640px] lg:w-[340px] lg:shrink-0 lg:border-l lg:border-t-0">
+        <div
+          className="border-t border-border md:w-[300px] md:shrink-0 md:border-l md:border-t-0 lg:w-[340px]"
+          style={isWide ? { height: paneHeight } : undefined}
+        >
           <ControlPanel
             shader={shader}
             values={values}

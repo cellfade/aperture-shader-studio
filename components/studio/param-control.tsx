@@ -21,7 +21,7 @@ export function ParamControl({ param, value, onChange }: Props) {
     case "range": {
       const v = typeof value === "number" && Number.isFinite(value) ? value : param.min;
       return (
-        <label className="block py-0.5">
+        <label className="block py-1.5">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[13px] text-foreground/80">{param.label}</span>
             <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
@@ -56,25 +56,27 @@ export function ParamControl({ param, value, onChange }: Props) {
     case "boolean": {
       const on = value === true;
       return (
-        <div className="flex items-center justify-between">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={param.label}
+          onClick={() => onChange(!on)}
+          className={`flex w-full items-center justify-between rounded-md py-1 text-left ${FOCUS}`}
+        >
           <span className="text-[13px] text-foreground/80">{param.label}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={on}
-            aria-label={param.label}
-            onClick={() => onChange(!on)}
-            className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors ${FOCUS} ${
+          <span
+            className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
               on ? "border-foreground/40 bg-foreground/25" : "border-border bg-secondary"
             }`}
           >
             <span
-              className={`absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full transition-all ${
-                on ? "left-[18px] bg-foreground" : "left-0.5 bg-muted-foreground"
+              className={`absolute top-1/2 size-5 -translate-y-1/2 rounded-full transition-all ${
+                on ? "left-[22px] bg-foreground" : "left-0.5 bg-muted-foreground"
               }`}
             />
-          </button>
-        </div>
+          </span>
+        </button>
       );
     }
 

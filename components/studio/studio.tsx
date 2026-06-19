@@ -29,9 +29,11 @@ function humanize(id: string) {
   return id.replace(/-/g, " ");
 }
 
-/** SSR-safe media query hook (starts false, resolves on mount). */
+/** Media query hook — correct on first client paint (no layout flash). */
 function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(false);
+  const [matches, setMatches] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
   useEffect(() => {
     const mq = window.matchMedia(query);
     const update = () => setMatches(mq.matches);
@@ -41,6 +43,9 @@ function useMediaQuery(query: string) {
   }, [query]);
   return matches;
 }
+
+const GHOST_BTN =
+  "rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const [image, setImage] = useState<LoadedImage | null>(null);
@@ -69,30 +74,28 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const shader = SHADERS_BY_ID[activeId];
   const values = valuesByShader[activeId] ?? initialValues(shader);
   const ar = image ? image.w / image.h : 16 / 10;
-  const isWide = useMediaQuery("(min-width: 768px)");
+  // Two-pane only on real desktop width; tablet + phone stack (canvas at image aspect, no letterbox).
   const isDesktop = useMediaQuery("(min-width: 1024px)");
-  // shorter pane on tablet (narrow canvas) to avoid vertical letterbox; full height on desktop
-  const paneHeight = isDesktop
-    ? "clamp(440px, 72vh, 760px)"
-    : "clamp(360px, 52vh, 520px)";
+  const paneHeight = "clamp(440px, 72vh, 760px)";
 
   const showDropPrompt = shader.takesImage && !image;
   const canCompare = shader.category === "image-filter" && !!image;
   const showCompare = canCompare && compareOn;
 
+  const announceMsg = (msg: string) => setAnnounce(`${msg} ​`); // zero-width keeps repeats announced
   const flashNotice = (msg: string) => {
     setNotice(msg);
+    announceMsg(msg);
     window.setTimeout(() => setNotice((n) => (n === msg ? null : n)), 3200);
   };
 
-  // single place that owns the blob-url revoke invariant
   const commitImage = useCallback((next: LoadedImage) => {
     if (objectUrl.current && objectUrl.current !== next.url) {
       URL.revokeObjectURL(objectUrl.current);
     }
     objectUrl.current = next.isBlob ? next.url : null;
     setImage(next);
-    setAnnounce(`Loaded ${next.name}, ${next.w} by ${next.h} pixels`);
+    setAnnounce(`Loaded ${next.name}, ${next.w} by ${next.h} pixels ​`);
   }, []);
 
   const loadFile = useCallback(
@@ -117,6 +120,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       };
       img.src = url;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [commitImage],
   );
 
@@ -219,6 +223,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     }
     if (clamped) flashNotice(`Large image — exported at ${width}×${height}.`);
     setExportStatus("working");
+    announceMsg("Rendering export");
     setExportReq({
       shaderId: activeId,
       values,
@@ -231,16 +236,17 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const onExportDone = (success: boolean) => {
     setExportReq(null);
     setExportStatus(success ? "done" : "error");
-    if (!success) flashNotice("Export failed — try a smaller image or another shader.");
+    if (success) announceMsg("Export saved");
+    else flashNotice("Export failed — try a smaller image or another shader.");
     window.setTimeout(() => setExportStatus("idle"), 1600);
   };
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_50px_-30px_rgba(0,0,0,0.85)]">
       {/* Studio top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-2.5">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-muted-foreground" />
+          <span className="size-1.5 shrink-0 rounded-full bg-muted-foreground" />
           <span className="truncate">
             {image ? image.name : "No photo"}
             {image && (
@@ -249,19 +255,24 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
               </span>
             )}
           </span>
-          {notice && <span className="ms-2 truncate text-foreground/80">· {notice}</span>}
+          {notice && (
+            <span className="ms-2 hidden truncate text-foreground/80 sm:inline">
+              · {notice}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
+          {image && (
+            <button type="button" onClick={() => fileInput.current?.click()} className={GHOST_BTN}>
+              Replace
+            </button>
+          )}
           {canCompare && (
             <button
               type="button"
               onClick={() => setCompareOn((v) => !v)}
               aria-pressed={compareOn}
-              className={`rounded-md border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-                compareOn
-                  ? "border-foreground/30 bg-foreground/10 text-foreground"
-                  : "border-border text-muted-foreground hover:text-foreground"
-              }`}
+              className={`${GHOST_BTN} ${compareOn ? "bg-foreground/10 text-foreground" : ""}`}
             >
               Compare {compareOn ? "on" : "off"}
             </button>
@@ -270,7 +281,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
             type="button"
             onClick={startExport}
             disabled={exportStatus === "working"}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             {exportStatus === "working"
               ? "Rendering…"
@@ -284,14 +295,14 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       </div>
 
       {/* Studio body */}
-      <div className="flex flex-col md:flex-row">
+      <div className="flex flex-col lg:flex-row">
         {/* Canvas area */}
         <div
-          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 md:flex-1 ${
+          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 lg:flex-1 ${
             dragging ? "ring-2 ring-inset ring-foreground/30" : ""
           }`}
           style={
-            isWide
+            isDesktop
               ? { height: paneHeight }
               : { aspectRatio: String(ar), maxHeight: "62vh", minHeight: 280 }
           }
@@ -327,8 +338,8 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
 
         {/* Control rail */}
         <div
-          className="border-t border-border md:w-[300px] md:shrink-0 md:border-l md:border-t-0 lg:w-[340px]"
-          style={isWide ? { height: paneHeight } : undefined}
+          className="max-h-[78vh] border-t border-border lg:max-h-none lg:w-[340px] lg:shrink-0 lg:border-l lg:border-t-0"
+          style={isDesktop ? { height: paneHeight } : undefined}
         >
           <ControlPanel
             shader={shader}
@@ -344,6 +355,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
         ref={fileInput}
         type="file"
         accept={ACCEPT.join(",")}
+        aria-label="Upload a photo"
         className="sr-only"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -420,20 +432,18 @@ function DropPrompt({
         className="group flex flex-col items-center rounded-xl px-8 py-6 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <svg
-          width="34"
-          height="34"
+          width="36"
+          height="36"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+          strokeWidth="1.25"
           className="text-muted-foreground transition-colors group-hover:text-foreground"
           aria-hidden
         >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="M12 3v13" />
-          <path d="m7 8 5-5 5 5" />
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4" />
         </svg>
         <p className="mt-4 text-[15px] text-foreground">
           Drop a photo, click to browse, or paste

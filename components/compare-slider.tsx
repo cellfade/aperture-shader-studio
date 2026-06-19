@@ -104,10 +104,10 @@ export function CompareSlider({
       </div>
 
       {/* corner labels */}
-      <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-sm border border-white/10 bg-black/45 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm">
+      <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-sm border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/95 backdrop-blur-sm">
         {beforeLabel}
       </span>
-      <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-sm border border-white/10 bg-black/45 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm">
+      <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-sm border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/95 backdrop-blur-sm">
         {afterLabel}
       </span>
 
@@ -135,10 +135,10 @@ export function CompareSlider({
           className="block size-3.5 rounded-full"
           style={{ background: glow, boxShadow: `0 0 12px ${glow}` }}
         />
-        <span className="absolute -left-3 text-white/55" aria-hidden>
+        <span className="absolute -left-3 text-white/85" aria-hidden>
           ‹
         </span>
-        <span className="absolute -right-3 text-white/55" aria-hidden>
+        <span className="absolute -right-3 text-white/85" aria-hidden>
           ›
         </span>
       </div>

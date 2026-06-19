@@ -34,7 +34,7 @@ export function ControlPanel({
   const reset = () => onReplaceValues(initialValues(shader));
 
   const randomize = () => {
-    const next: ParamValues = {};
+    const next: ParamValues = { ...initialValues(shader) };
     for (const p of shader.params) {
       if (p.control === "range") {
         const raw = p.min + Math.random() * (p.max - p.min);

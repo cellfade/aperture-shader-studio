@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { CompareSlider } from "@/components/compare-slider";
 import { ControlPanel } from "@/components/studio/control-panel";
 import { ShaderView } from "@/components/studio/shader-view";
@@ -27,21 +27,6 @@ type ExportStatus = "idle" | "working" | "done" | "error";
 
 function humanize(id: string) {
   return id.replace(/-/g, " ");
-}
-
-/** Media query hook — correct on first client paint (no layout flash). */
-function useMediaQuery(query: string) {
-  const [matches, setMatches] = useState(() =>
-    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(query);
-    const update = () => setMatches(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, [query]);
-  return matches;
 }
 
 const GHOST_BTN =
@@ -74,9 +59,6 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const shader = SHADERS_BY_ID[activeId];
   const values = valuesByShader[activeId] ?? initialValues(shader);
   const ar = image ? image.w / image.h : 16 / 10;
-  // Two-pane only on real desktop width; tablet + phone stack (canvas at image aspect, no letterbox).
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const paneHeight = "clamp(440px, 72vh, 760px)";
 
   const showDropPrompt = shader.takesImage && !image;
   const canCompare = shader.category === "image-filter" && !!image;
@@ -298,14 +280,10 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       <div className="flex flex-col lg:flex-row">
         {/* Canvas area */}
         <div
-          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 lg:flex-1 ${
+          className={`relative flex aspect-[var(--ar)] max-h-[62vh] min-h-[280px] items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 lg:aspect-auto lg:h-[clamp(440px,72vh,760px)] lg:max-h-none lg:min-h-0 lg:flex-1 ${
             dragging ? "ring-2 ring-inset ring-foreground/30" : ""
           }`}
-          style={
-            isDesktop
-              ? { height: paneHeight }
-              : { aspectRatio: String(ar), maxHeight: "62vh", minHeight: 280 }
-          }
+          style={{ "--ar": String(ar) } as CSSProperties}
         >
           {showDropPrompt ? (
             <DropPrompt onPick={() => fileInput.current?.click()} onSample={loadSample} />
@@ -337,10 +315,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
         </div>
 
         {/* Control rail */}
-        <div
-          className="max-h-[78vh] border-t border-border lg:max-h-none lg:w-[340px] lg:shrink-0 lg:border-l lg:border-t-0"
-          style={isDesktop ? { height: paneHeight } : undefined}
-        >
+        <div className="max-h-[78vh] border-t border-border lg:h-[clamp(440px,72vh,760px)] lg:max-h-none lg:w-[340px] lg:shrink-0 lg:border-l lg:border-t-0">
           <ControlPanel
             shader={shader}
             values={values}

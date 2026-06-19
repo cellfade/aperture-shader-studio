@@ -114,7 +114,11 @@ export function CompareSlider({
       {/* the seam */}
       <div
         className="pointer-events-none absolute inset-y-0 z-10 w-px -translate-x-1/2"
-        style={{ left: `${pos}%`, background: glow, boxShadow: `0 0 18px ${glow}` }}
+        style={{
+          left: `${pos}%`,
+          background: "#fff",
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.4)",
+        }}
       />
 
       {/* the aperture handle */}
@@ -128,13 +132,10 @@ export function CompareSlider({
         aria-valuenow={Math.round(pos)}
         aria-valuetext={`${Math.round(pos)}% revealed — ${afterLabel}`}
         onKeyDown={onKeyDown}
-        className="absolute top-1/2 z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/25 bg-black/50 backdrop-blur-md outline-none transition-[box-shadow,transform] focus-visible:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ left: `${pos}%`, boxShadow: `0 0 0 1px rgba(255,255,255,0.04), 0 0 22px ${glow}55` }}
+        className="absolute top-1/2 z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/45 bg-black/55 backdrop-blur-md outline-none transition-[box-shadow,transform] focus-visible:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ left: `${pos}%`, boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 0 16px rgba(255,255,255,0.22)" }}
       >
-        <span
-          className="block size-3.5 rounded-full"
-          style={{ background: glow, boxShadow: `0 0 12px ${glow}` }}
-        />
+        <span className="block size-4 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.25)]" />
         <span className="absolute -left-3 text-white/85" aria-hidden>
           ‹
         </span>

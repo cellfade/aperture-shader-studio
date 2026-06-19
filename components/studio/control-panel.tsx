@@ -27,9 +27,10 @@ export function ControlPanel({
   const colorParams = shader.params.filter(
     (p) => p.control === "color" || p.control === "palette",
   );
-  const adjustParams = shader.params.filter(
-    (p) => p.control !== "color" && p.control !== "palette",
+  const valueParams = shader.params.filter(
+    (p) => p.control === "range" || p.control === "enum",
   );
+  const toggleParams = shader.params.filter((p) => p.control === "boolean");
 
   const reset = () => onReplaceValues(initialValues(shader));
 
@@ -72,9 +73,9 @@ export function ControlPanel({
           )}
         </div>
 
-        {adjustParams.length > 0 && (
+        {(valueParams.length > 0 || toggleParams.length > 0) && (
           <Section title="Adjust">
-            {adjustParams.map((p) => (
+            {valueParams.map((p) => (
               <ParamControl
                 key={p.name}
                 param={p}
@@ -82,6 +83,18 @@ export function ControlPanel({
                 onChange={(v) => onChange(p.name, v)}
               />
             ))}
+            {toggleParams.length > 0 && (
+              <div className="space-y-1 border-t border-border/60 pt-3">
+                {toggleParams.map((p) => (
+                  <ParamControl
+                    key={p.name}
+                    param={p}
+                    value={values[p.name]}
+                    onChange={(v) => onChange(p.name, v)}
+                  />
+                ))}
+              </div>
+            )}
           </Section>
         )}
 

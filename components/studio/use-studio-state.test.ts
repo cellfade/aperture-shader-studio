@@ -267,6 +267,40 @@ describe("ingest dispatch + capture", () => {
   });
 });
 
+describe("URL-hash seeding + restore", () => {
+  afterEach(() => {
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("seeds the active shader + params from the location hash on init", () => {
+    window.history.replaceState(null, "", "/#s=mesh-gradient&p=speed:1.5");
+    const { result } = renderHook(() => useStudioState());
+    expect(result.current.activeId).toBe("mesh-gradient");
+    expect(result.current.values.speed).toBeCloseTo(1.5, 4);
+    // unspecified params still take their shader defaults
+    const mesh = SHADERS_BY_ID["mesh-gradient"];
+    const swirl = mesh.params.find((p) => p.name === "swirl");
+    expect(result.current.values.swirl).toBe(swirl?.default);
+  });
+
+  it("falls back to the default shader for an unknown hash shader id", () => {
+    window.history.replaceState(null, "", "/#s=not-real&p=speed:9");
+    const { result } = renderHook(() => useStudioState());
+    expect(result.current.activeId).toBe(DEFAULT_SHADER_ID);
+  });
+
+  it("restores state on a back/forward hashchange", () => {
+    const { result } = renderHook(() => useStudioState());
+    expect(result.current.activeId).toBe(DEFAULT_SHADER_ID);
+    act(() => {
+      window.location.hash = "#s=mesh-gradient&p=speed:0.5";
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(result.current.activeId).toBe("mesh-gradient");
+    expect(result.current.values.speed).toBeCloseTo(0.5, 4);
+  });
+});
+
 describe("unmount cleanup", () => {
   it("revokes both live source URLs on unmount", () => {
     const { result, unmount } = renderHook(() => useStudioState());

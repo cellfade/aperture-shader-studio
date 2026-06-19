@@ -1,13 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { ShaderPicker } from "@/components/studio/shader-picker";
 import { ParamControl } from "@/components/studio/param-control";
+import { PresetRow } from "@/components/studio/preset-row";
+import {
+  buildShareUrl,
+  copyShareLink,
+} from "@/components/studio/use-url-state";
 import {
   initialValues,
   type Shader,
   type ParamValue,
   type ParamValues,
 } from "@/lib/studio/registry";
+
+const FOOTER_BTN =
+  "font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 interface Props {
   shader: Shader;
@@ -32,7 +41,17 @@ export function ControlPanel({
   );
   const toggleParams = shader.params.filter((p) => p.control === "boolean");
 
+  const [copied, setCopied] = useState(false);
   const reset = () => onReplaceValues(initialValues(shader));
+
+  const share = async () => {
+    const url = buildShareUrl({ shaderId: shader.id, values });
+    const ok = await copyShareLink(url);
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    }
+  };
 
   const randomize = () => {
     const next: ParamValues = { ...initialValues(shader) };
@@ -73,6 +92,12 @@ export function ControlPanel({
           )}
         </div>
 
+        <PresetRow
+          shader={shader}
+          values={values}
+          onReplaceValues={onReplaceValues}
+        />
+
         {(valueParams.length > 0 || toggleParams.length > 0) && (
           <Section title="Adjust">
             {valueParams.map((p) => (
@@ -112,21 +137,23 @@ export function ControlPanel({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-border px-4 py-3">
-        <button
-          type="button"
-          onClick={reset}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
+      <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+        <button type="button" onClick={reset} className={FOOTER_BTN}>
           Reset all
         </button>
-        <button
-          type="button"
-          onClick={randomize}
-          className="font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          Randomize
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={share}
+            aria-label="Copy a shareable link to this look"
+            className={FOOTER_BTN}
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <button type="button" onClick={randomize} className={FOOTER_BTN}>
+            Randomize
+          </button>
+        </div>
       </div>
     </div>
   );

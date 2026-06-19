@@ -15,6 +15,11 @@ import {
   validateDecodedImage,
   isVideoTooLong,
 } from "@/lib/studio/upload-validation";
+import {
+  readInitialUrlState,
+  useUrlState,
+} from "@/components/studio/use-url-state";
+import type { UrlState } from "@/lib/studio/url-state";
 
 export interface LoadedImage {
   url: string;
@@ -91,6 +96,10 @@ export function useStudioState(): StudioState {
   );
   const [videoStageOpen, setVideoStageOpen] = useState(false);
 
+  // Seed with the DEFAULT shader so the server-rendered HTML and the first client
+  // render match — the URL hash is client-only (never sent to the server), so
+  // reading it during render would cause a hydration mismatch (React #418). The
+  // shared "look" from the hash is applied AFTER mount, in the effect below.
   const [activeId, setActiveId] = useState(DEFAULT_SHADER_ID);
   const [valuesByShader, setValuesByShader] = useState<
     Record<string, ParamValues>
@@ -299,6 +308,42 @@ export function useStudioState(): StudioState {
       setValuesByShader((prev) => ({ ...prev, [activeId]: next })),
     [activeId],
   );
+
+  // ── shareable URL hash sync ──────────────────────────────────
+  // Restore state pushed in by back/forward navigation or a pasted link. The
+  // decoded values are a partial patch validated against the registry, so merge
+  // them over the shader's defaults.
+  const restoreFromUrl = useCallback((next: UrlState) => {
+    const target = SHADERS_BY_ID[next.shaderId];
+    if (!target) return;
+    setActiveId(next.shaderId);
+    setValuesByShader((prev) => ({
+      ...prev,
+      [next.shaderId]: { ...initialValues(target), ...next.values },
+    }));
+  }, []);
+
+  useUrlState({
+    state: { shaderId: activeId, values },
+    onExternalChange: restoreFromUrl,
+  });
+
+  // Apply a shared "look" from the URL hash AFTER mount — never during render
+  // (the hash is client-only; applying it at render time mismatches SSR
+  // hydration). Runs once; a present, valid hash restores its shader + params.
+  const urlAppliedRef = useRef(false);
+  useEffect(() => {
+    if (urlAppliedRef.current) return;
+    urlAppliedRef.current = true;
+    const initial = readInitialUrlState();
+    // Apply the client-only URL hash exactly once, post-mount — this is the
+    // React-blessed time to reconcile state from an external system (here, the
+    // location hash) that isn't available during SSR. Doing it at render time
+    // would mismatch hydration (#418); the disable is for this intentional,
+    // one-shot external reconciliation, not an ongoing render-driven setState.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (initial) restoreFromUrl(initial);
+  }, [restoreFromUrl]);
 
   // ── video capture ────────────────────────────────────────────
   const onCaptureFrame = useCallback(

@@ -237,10 +237,23 @@ export function awaitRenderedFrame(
 /** Decode-preload an image URL so the texture upload is ready before we read back. */
 export function preloadImage(url: string, then: () => void): void {
   const pre = new Image();
+  // Fire the callback at most once, and detach everything that could re-fire it.
+  // `img.decode()` can reject LATE (after the consumer moved on / unmounted) and
+  // the onload/onerror fallback handlers must never double-fire either.
+  let done = false;
+  const settle = () => {
+    if (done) return;
+    done = true;
+    pre.onload = null;
+    pre.onerror = null;
+    // Drop the in-flight network/decode work so the Image can be collected.
+    pre.src = "";
+    then();
+  };
   pre.src = url;
-  if (pre.decode) pre.decode().then(then, then);
+  if (pre.decode) pre.decode().then(settle, settle);
   else {
-    pre.onload = then;
-    pre.onerror = then;
+    pre.onload = settle;
+    pre.onerror = settle;
   }
 }

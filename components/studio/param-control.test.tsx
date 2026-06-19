@@ -37,6 +37,41 @@ describe("ParamControl (range)", () => {
   });
 });
 
+describe("ParamControl (range) — invalid/out-of-range values", () => {
+  it("falls back to param.min when the value is not a finite number", () => {
+    const param = makeParam({ name: "size", control: "range", min: 2, max: 10 });
+    // NaN — a corrupted/uninitialized value must not produce an invalid input.
+    render(<ParamControl param={param} value={NaN} onChange={() => {}} />);
+    expect(screen.getByRole("slider", { name: "Size" })).toHaveValue("2");
+  });
+
+  it("falls back to param.min when the value is the wrong type entirely", () => {
+    const param = makeParam({ name: "size", control: "range", min: 2, max: 10 });
+    render(
+      <ParamControl
+        param={param}
+        value={"not-a-number" as unknown as number}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("slider", { name: "Size" })).toHaveValue("2");
+  });
+
+  it("resets to the default on double-click", async () => {
+    const onChange = vi.fn();
+    const param = makeParam({
+      name: "size",
+      control: "range",
+      min: 0,
+      max: 10,
+      default: 4,
+    });
+    render(<ParamControl param={param} value={9} onChange={onChange} />);
+    await userEvent.dblClick(screen.getByRole("slider", { name: "Size" }));
+    expect(onChange).toHaveBeenCalledWith("size", 4);
+  });
+});
+
 describe("ParamControl (boolean)", () => {
   it("renders a switch and toggles via onChange(name, !value)", async () => {
     const onChange = vi.fn();
@@ -68,6 +103,54 @@ describe("ParamControl (enum)", () => {
     const btn = screen.getByRole("button", { name: "4x4" });
     await userEvent.click(btn);
     expect(onChange).toHaveBeenCalledWith("type", "4x4");
+  });
+});
+
+describe("ParamControl (enum) — invalid values", () => {
+  it("falls back to the first option when the value is not one of the options", () => {
+    const onChange = vi.fn();
+    const param = makeParam({
+      name: "type",
+      label: "Type",
+      control: "enum",
+      options: ["random", "2x2", "4x4"],
+      default: "random",
+    });
+    // A bogus value must still render with a valid selection (first option
+    // pressed) rather than no selection at all.
+    render(
+      <ParamControl
+        param={param}
+        value={42 as unknown as string}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "random" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+});
+
+describe("ParamControl (boolean) — invalid values", () => {
+  it("treats any non-`true` value as off", () => {
+    const param = makeParam({
+      name: "inverted",
+      label: "Inverted",
+      control: "boolean",
+      default: false,
+    });
+    render(
+      <ParamControl
+        param={param}
+        value={"yes" as unknown as boolean}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByRole("switch", { name: "Inverted" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
   });
 });
 

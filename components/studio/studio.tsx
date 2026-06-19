@@ -29,6 +29,14 @@ import {
   GENERATIVE_EXPORT,
   sanitizeFilename,
 } from "@/lib/studio/download";
+import {
+  IMAGE_ACCEPT,
+  VIDEO_ACCEPT,
+  validateImageFile,
+  validateVideoFile,
+  validateDecodedImage,
+  isVideoTooLong,
+} from "@/lib/studio/upload-validation";
 
 interface LoadedImage {
   url: string;
@@ -41,11 +49,7 @@ interface LoadedImage {
 type Mode = "photo" | "video";
 type ExportStatus = "idle" | "working" | "done" | "error";
 
-const IMAGE_ACCEPT = ["image/png", "image/jpeg", "image/webp", "image/avif"];
-const VIDEO_ACCEPT = ["video/mp4", "video/webm", "video/quicktime"];
 const ACCEPT_ATTR = [...IMAGE_ACCEPT, ...VIDEO_ACCEPT].join(",");
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
-const MAX_VIDEO_SECONDS = 300;
 
 const GHOST_BTN =
   "rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -132,13 +136,23 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
 
   const loadImageFile = useCallback(
     (file: File) => {
-      if (file.type && !IMAGE_ACCEPT.includes(file.type)) {
-        flashNotice("Unsupported image — use JPG, PNG, or WebP.");
+      const check = validateImageFile(file);
+      if (!check.ok) {
+        flashNotice(check.message);
         return;
       }
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
+        const dims = validateDecodedImage({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+        if (!dims.ok) {
+          URL.revokeObjectURL(url);
+          flashNotice(dims.message);
+          return;
+        }
         setMode("photo");
         // abandoning any loaded video for an image source — release it
         if (videoUrlRef.current) {
@@ -169,12 +183,9 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
 
   const loadVideoFile = useCallback(
     (file: File) => {
-      if (file.type && !VIDEO_ACCEPT.includes(file.type)) {
-        flashNotice("Unsupported video — use MP4, WebM, or MOV.");
-        return;
-      }
-      if (file.size > MAX_VIDEO_BYTES) {
-        flashNotice("Video is over 200 MB — try a shorter or smaller clip.");
+      const check = validateVideoFile(file);
+      if (!check.ok) {
+        flashNotice(check.message);
         return;
       }
       const url = URL.createObjectURL(file);
@@ -309,7 +320,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const onVideoMeta = useCallback(
     (w: number, h: number, duration: number) => {
       setVideoDims({ w, h });
-      if (duration > MAX_VIDEO_SECONDS) {
+      if (isVideoTooLong(duration)) {
         flashNotice("Long clip — scrubbing may be heavy. Capture still works.");
       }
     },

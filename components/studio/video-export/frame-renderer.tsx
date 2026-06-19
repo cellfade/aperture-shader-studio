@@ -100,6 +100,13 @@ const MIN_SETTLE_MS = 50;
  * Draw any CanvasImageSource into a fully-decoded HTMLImageElement of WxH.
  * Returns the object URL too so the caller can revoke it after the synchronous
  * texture upload (mount.setUniforms) has read the image.
+ *
+ * Self-contained revoke discipline: this helper owns the blob URL it mints and
+ * revokes it itself on ANY rejection (decode/load failure) — so a throw before
+ * the caller's try/finally is reached can never leak it. On success it hands the
+ * still-live URL to the caller, which revokes it once the synchronous texture
+ * upload has read the image (the URL must outlive this function on the happy
+ * path). The two paths can't double-revoke: rejection never returns the URL.
  */
 async function sourceToImageWithUrl(
   source: CanvasImageSource,
@@ -120,17 +127,24 @@ async function sourceToImageWithUrl(
   if (!blob) throw new Error("failed to encode source frame");
 
   const url = URL.createObjectURL(blob);
-  const img = new Image();
-  img.src = url;
-  if (img.decode) {
-    await img.decode();
-  } else {
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("source image failed to load"));
-    });
+  try {
+    const img = new Image();
+    img.src = url;
+    if (img.decode) {
+      await img.decode();
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("source image failed to load"));
+      });
+    }
+    return { img, url };
+  } catch (err) {
+    // We minted this URL; revoke it before propagating so the throw path can't
+    // leak it (the caller never sees the URL on rejection, so no double-revoke).
+    URL.revokeObjectURL(url);
+    throw err;
   }
-  return { img, url };
 }
 
 function FrameRendererImpl(

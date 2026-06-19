@@ -6,8 +6,20 @@ export function downloadBlob(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  // revoke after the click has been handled
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  // Revoke exactly once. We keep a short timer (revoking synchronously can
+  // cancel the download in some browsers) but ALSO revoke on `pagehide` so the
+  // blob can't leak if the page unloads before the timer fires. Whichever wins,
+  // the other is a no-op and the listener is always removed.
+  let revoked = false;
+  const revoke = () => {
+    if (revoked) return;
+    revoked = true;
+    window.removeEventListener("pagehide", revoke);
+    URL.revokeObjectURL(url);
+  };
+  window.addEventListener("pagehide", revoke);
+  setTimeout(revoke, 1000);
 }
 
 /** Longest-side cap to stay within browser WebGL/canvas limits. */

@@ -88,27 +88,36 @@ class RenderCore {
     const root = createRoot(host);
     const core = new RenderCore(host, root);
 
-    await new Promise<void>((resolve) => {
-      const onRef = (h: FrameRendererHandle | null) => {
-        if (h && !core.handle) {
-          core.handle = h;
-          resolve();
-        }
-      };
-      root.render(
-        createElement(FrameRenderer, {
-          ref: onRef,
-          shader,
-          values: args.values,
-          width: args.width,
-          height: args.height,
-        }),
-      );
-    });
+    // Once the root + host are mounted, ANY failure before `create` returns must
+    // tear them down — otherwise the detached React root + off-screen host element
+    // linger (the caller never received the instance, so its finally can't reach
+    // them). Mirrors the outer pipeline.core?.dispose() for the post-create paths.
+    try {
+      await new Promise<void>((resolve) => {
+        const onRef = (h: FrameRendererHandle | null) => {
+          if (h && !core.handle) {
+            core.handle = h;
+            resolve();
+          }
+        };
+        root.render(
+          createElement(FrameRenderer, {
+            ref: onRef,
+            shader,
+            values: args.values,
+            width: args.width,
+            height: args.height,
+          }),
+        );
+      });
 
-    // Give the shader mount a tick to initialize its GL context + uniforms.
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
-    return core;
+      // Give the shader mount a tick to initialize its GL context + uniforms.
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      return core;
+    } catch (err) {
+      core.dispose();
+      throw err;
+    }
   }
 
   render(source: CanvasImageSource): Promise<HTMLCanvasElement> {

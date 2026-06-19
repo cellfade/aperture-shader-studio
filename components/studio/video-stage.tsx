@@ -27,6 +27,29 @@ function stamp(t: number): string {
   return `${m}m${s.toString().padStart(2, "0")}s${ms.toString().padStart(3, "0")}`;
 }
 
+/**
+ * Throttle progress announcements to ~decile (10%) milestones plus the final
+ * frame. Per-frame polite-live-region updates get coalesced + skipped by screen
+ * readers (#43); this writes the live-region text only when a new decile is
+ * crossed, while the visual per-frame status is updated separately and untouched.
+ *
+ * `decileRef` holds the last announced decile (0–10); seed it to -1 per run so
+ * the first reported frame announces. Returns the (possibly unchanged) text to
+ * set, or `null` to skip this update.
+ */
+function milestoneText(
+  done: number,
+  total: number,
+  decileRef: { current: number },
+  verb: string,
+): string | null {
+  if (total <= 0) return null;
+  const decile = done >= total ? 10 : Math.floor((done / total) * 10);
+  if (decile <= decileRef.current) return null;
+  decileRef.current = decile;
+  return `${verb} ${done} of ${total}`;
+}
+
 /** Resolve once the video has finished seeking (so the drawn frame is the target one). */
 function awaitSeeked(
   v: HTMLVideoElement,
@@ -106,13 +129,17 @@ export function VideoStage({
   const [outTime, setOutTime] = useState(0);
   const [count, setCount] = useState(DEFAULT_FRAMES);
   const [running, setRunning] = useState(false);
-  const [seqStatus, setSeqStatus] = useState("");
+  const [seqStatus, setSeqStatus] = useState(""); // visual, per-frame
+  const [seqAnnounce, setSeqAnnounce] = useState(""); // live-region, throttled
+  const seqDecileRef = useRef(-1);
   const abortRef = useRef<AbortController | null>(null);
 
   // ── mp4 export state ───────────────────────────────────────────
   const [videoExportOk, setVideoExportOk] = useState(false);
   const [vidRunning, setVidRunning] = useState(false);
-  const [vidStatus, setVidStatus] = useState("");
+  const [vidStatus, setVidStatus] = useState(""); // visual, per-frame
+  const [vidAnnounce, setVidAnnounce] = useState(""); // live-region, throttled
+  const vidDecileRef = useRef(-1);
   const vidAbortRef = useRef<AbortController | null>(null);
 
   // Probe WebCodecs H.264 support without importing the heavy export module.
@@ -244,9 +271,19 @@ export function VideoStage({
   // ── sequence export ────────────────────────────────────────────
   const seqValid =
     seekable && outTime > inTime && count >= MIN_FRAMES && count <= MAX_FRAMES;
+  // While running the button toggles to a always-enabled "Cancel".
+  const seqDisabled = !running && (!seqValid || vidRunning);
+  // In/out markers are locked while either export runs, or with no seekable clip.
+  const markersLocked = running || vidRunning || !seekable;
 
-  const setIn = () => setInTime(current);
-  const setOut = () => setOutTime(current);
+  const setIn = () => {
+    if (markersLocked) return;
+    setInTime(current);
+  };
+  const setOut = () => {
+    if (markersLocked) return;
+    setOutTime(current);
+  };
 
   const cancelSequence = () => {
     abortRef.current?.abort();
@@ -266,6 +303,8 @@ export function VideoStage({
 
     v.pause();
     setRunning(true);
+    seqDecileRef.current = -1;
+    setSeqAnnounce(`Exporting ${n} frames…`);
     const created: string[] = [];
     let done = false;
 
@@ -291,7 +330,11 @@ export function VideoStage({
       setSeqStatus(`Rendering 1/${n}…`);
       const blobs = await renderSequence(
         frames,
-        (rendered, total) => setSeqStatus(`Rendering ${rendered}/${total}…`),
+        (rendered, total) => {
+          setSeqStatus(`Rendering ${rendered}/${total}…`); // visual, per-frame
+          const msg = milestoneText(rendered, total, seqDecileRef, "Rendered");
+          if (msg) setSeqAnnounce(msg); // live-region, throttled to deciles
+        },
         signal,
       );
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
@@ -305,14 +348,17 @@ export function VideoStage({
       await zipAndDownloadFrames(blobs, `frames-${shaderId ?? "shader"}.zip`);
       done = true;
       setSeqStatus(`Saved ${blobs.length} frames ✓`);
+      setSeqAnnounce(`Saved ${blobs.length} frames.`);
       window.setTimeout(() => setSeqStatus((s) => (s.startsWith("Saved") ? "" : s)), 2400);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setSeqStatus("Cancelled");
+        setSeqAnnounce("Frame export cancelled.");
         window.setTimeout(() => setSeqStatus((s) => (s === "Cancelled" ? "" : s)), 1600);
       } else {
         onError?.("Couldn't export the sequence — try a shorter range.");
         setSeqStatus("");
+        setSeqAnnounce("");
       }
     } finally {
       cleanup();
@@ -324,6 +370,7 @@ export function VideoStage({
 
   // ── mp4 export ─────────────────────────────────────────────────
   const vidValid = seekable && outTime > inTime;
+  const vidDisabled = !vidRunning && (!vidValid || running);
   // While either export runs, the in/out markers + frame count are locked.
   const anyRunning = running || vidRunning;
 
@@ -345,31 +392,41 @@ export function VideoStage({
     v.pause();
     setVidRunning(true);
     setVidStatus("Preparing…");
+    vidDecileRef.current = -1;
+    setVidAnnounce("Preparing MP4 export…");
     let done = false;
 
     try {
       await exportVideo(
         lo,
         hi,
-        (rendered, total) => setVidStatus(`Rendering ${rendered}/${total}…`),
+        (rendered, total) => {
+          setVidStatus(`Rendering ${rendered}/${total}…`); // visual, per-frame
+          const msg = milestoneText(rendered, total, vidDecileRef, "Encoded");
+          if (msg) setVidAnnounce(msg); // live-region, throttled to deciles
+        },
         signal,
       );
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
       done = true;
       setVidStatus("Saved ✓");
+      setVidAnnounce("MP4 export saved.");
       window.setTimeout(() => setVidStatus((s) => (s === "Saved ✓" ? "" : s)), 2400);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setVidStatus("Cancelled");
+        setVidAnnounce("MP4 export cancelled.");
         window.setTimeout(() => setVidStatus((s) => (s === "Cancelled" ? "" : s)), 1600);
       } else if (err instanceof VideoExporterLoadError) {
         // #24: the exporter chunk failed to load — distinct from an encode
         // failure, so surface the connectivity-oriented message.
         onError?.(err.message);
         setVidStatus("");
+        setVidAnnounce("");
       } else {
         onError?.("Couldn't export the video — try a shorter range or another shader.");
         setVidStatus("");
+        setVidAnnounce("");
       }
     } finally {
       if (!done) setVidStatus((s) => (s.startsWith("Rendering") || s === "Preparing…" ? "" : s));
@@ -475,7 +532,7 @@ export function VideoStage({
             onClickCapture={(e) => {
               if (busy) e.stopPropagation();
             }}
-            className={`shrink-0 rounded-md border border-border bg-foreground/[0.06] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:opacity-60 ${FOCUS}`}
+            className={`shrink-0 rounded-md border border-border bg-foreground/[0.06] px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] ${FOCUS}`}
           >
             {busy ? "Capturing…" : "Capture frame"}
           </button>
@@ -492,8 +549,11 @@ export function VideoStage({
             <button
               type="button"
               onClick={setIn}
-              disabled={anyRunning || !seekable}
-              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+              onClickCapture={(e) => {
+                if (markersLocked) e.stopPropagation();
+              }}
+              aria-disabled={markersLocked || undefined}
+              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent ${FOCUS}`}
             >
               Set in
             </button>
@@ -503,8 +563,11 @@ export function VideoStage({
             <button
               type="button"
               onClick={setOut}
-              disabled={anyRunning || !seekable}
-              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+              onClickCapture={(e) => {
+                if (markersLocked) e.stopPropagation();
+              }}
+              aria-disabled={markersLocked || undefined}
+              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent ${FOCUS}`}
             >
               Set out
             </button>
@@ -544,16 +607,13 @@ export function VideoStage({
               <button
                 type="button"
                 onClick={running ? cancelSequence : runSequence}
-                disabled={running ? false : !seqValid || vidRunning}
+                onClickCapture={(e) => {
+                  if (seqDisabled) e.stopPropagation();
+                }}
+                aria-disabled={seqDisabled || undefined}
+                aria-describedby={seqDisabled ? "seq-reason" : undefined}
                 aria-label={running ? "Cancel frame export" : "Export frames as a zip"}
-                title={
-                  !running && (!seqValid || vidRunning)
-                    ? vidRunning
-                      ? "Another export is running"
-                      : "Set an out-point after the in-point"
-                    : undefined
-                }
-                className={`rounded-md border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+                className={`rounded-md border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent ${FOCUS}`}
               >
                 {running ? "Cancel" : "Frames · zip"}
               </button>
@@ -563,21 +623,35 @@ export function VideoStage({
               <button
                 type="button"
                 onClick={vidRunning ? cancelVideoExport : runVideoExport}
-                disabled={vidRunning ? false : !vidValid || running}
+                onClickCapture={(e) => {
+                  if (vidDisabled) e.stopPropagation();
+                }}
+                aria-disabled={vidDisabled || undefined}
+                aria-describedby={vidDisabled ? "vid-reason" : undefined}
                 aria-label={vidRunning ? "Cancel MP4 export" : "Export filtered video as MP4"}
-                title={
-                  !vidRunning && (!vidValid || running)
-                    ? running
-                      ? "Another export is running"
-                      : "Set an out-point after the in-point"
-                    : undefined
-                }
-                className={`rounded-md border border-foreground/30 bg-foreground/[0.08] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-50 ${FOCUS}`}
+                className={`rounded-md border border-foreground/30 bg-foreground/[0.08] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:border-border aria-disabled:bg-transparent aria-disabled:hover:bg-transparent ${FOCUS}`}
               >
                 {vidRunning ? "Cancel" : "Video · mp4"}
               </button>
             )}
           </div>
+
+          {/* Why an export action is unavailable — referenced by aria-describedby
+              on the focusable aria-disabled buttons so AT announces the reason. */}
+          {renderSequence && seqDisabled && (
+            <span id="seq-reason" className="sr-only">
+              {vidRunning
+                ? "Another export is running."
+                : "Set an out-point after the in-point to export frames."}
+            </span>
+          )}
+          {exportVideo && videoExportOk && vidDisabled && (
+            <span id="vid-reason" className="sr-only">
+              {running
+                ? "Another export is running."
+                : "Set an out-point after the in-point to export an MP4."}
+            </span>
+          )}
 
           {exportVideo && !videoExportOk && (
             <p
@@ -589,11 +663,14 @@ export function VideoStage({
             </p>
           )}
 
+          {/* Live regions read the THROTTLED milestone text (every ~10% +
+              start/done), not the per-frame visual status above, so AT doesn't
+              coalesce and skip intermediate steps (#43). */}
           <div className="sr-only" role="status" aria-live="polite">
-            {seqStatus}
+            {seqAnnounce}
           </div>
           <div className="sr-only" role="status" aria-live="polite">
-            {vidStatus}
+            {vidAnnounce}
           </div>
         </div>
       )}

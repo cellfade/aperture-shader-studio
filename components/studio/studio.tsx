@@ -169,8 +169,12 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                 <button
                   type="button"
                   onClick={startExport}
-                  disabled={exportStatus === "working"}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  onClickCapture={(e) => {
+                    if (exportStatus === "working") e.stopPropagation();
+                  }}
+                  aria-disabled={exportStatus === "working" || undefined}
+                  aria-busy={exportStatus === "working" || undefined}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {exportStatus === "working"
                     ? "Rendering…"

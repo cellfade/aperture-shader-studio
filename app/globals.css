@@ -215,6 +215,21 @@
   .animate-rise {
     animation: none;
   }
+
+  /* App-wide backstop: neutralize non-essential CSS transitions/animations for
+     users who ask for reduced motion. The JS `useReducedMotion()` hook already
+     freezes shader speed + the compare-seam reveal; this catches the decorative
+     Tailwind `transition-*`/`animate-*` utilities (hover color fades, toggle
+     slides, etc.) without touching layout or the focus-visible outline (an
+     outline, not a transition), so keyboard focus stays fully visible. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Range slider — visible focus + touch-friendly thumb (monochrome) */
@@ -227,9 +242,10 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  margin-top: -5px;
+  width: 20px;
+  height: 20px;
+  /* center the 20px thumb on the 6px runnable track: (6 - 20) / 2 */
+  margin-top: -7px;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 9999px;
   background: #aab2c0;
@@ -239,8 +255,8 @@ input[type="range"]::-webkit-slider-thumb {
     border-color 120ms ease;
 }
 input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 9999px;
   background: #aab2c0;

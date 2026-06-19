@@ -103,11 +103,11 @@ export function CompareSlider({
         {after}
       </div>
 
-      {/* corner labels */}
-      <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-sm border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/95 backdrop-blur-sm">
+      {/* corner labels — mono microtype in high-contrast pills (chrome stays monochrome) */}
+      <span className="pointer-events-none absolute left-3 top-3 z-20 rounded-sm border border-white/15 bg-black/70 px-2 py-[3px] font-mono text-[10px] font-medium uppercase leading-none tracking-[0.2em] text-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.4)] backdrop-blur-sm">
         {beforeLabel}
       </span>
-      <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-sm border border-white/10 bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/95 backdrop-blur-sm">
+      <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-sm border border-white/15 bg-black/70 px-2 py-[3px] font-mono text-[10px] font-medium uppercase leading-none tracking-[0.2em] text-white/95 shadow-[0_1px_3px_rgba(0,0,0,0.4)] backdrop-blur-sm">
         {afterLabel}
       </span>
 

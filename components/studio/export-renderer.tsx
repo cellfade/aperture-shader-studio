@@ -2,13 +2,17 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef } from "react";
-import { isPaperShaderElement } from "@paper-design/shaders-react";
 import {
   getComponent,
   type Shader,
   type ParamValues,
 } from "@/lib/studio/registry";
 import { downloadBlob } from "@/lib/studio/download";
+import {
+  createContentSampler,
+  getPaperMount,
+  preloadImage,
+} from "@/lib/studio/render-readiness";
 
 interface ExportRendererProps {
   shader: Shader;
@@ -43,10 +47,7 @@ export function ExportRenderer({
     const MIN_SETTLE = 200;
     const MAX_WAIT = 5000;
 
-    const scratch = document.createElement("canvas");
-    scratch.width = 24;
-    scratch.height = 24;
-    const sctx = scratch.getContext("2d", { willReadFrequently: true });
+    const sampler = createContentSampler();
 
     const finish = (ok: boolean) => {
       if (settled) return;
@@ -54,31 +55,10 @@ export function ExportRenderer({
       onDone(ok);
     };
 
-    // Content gate: a drawn frame has non-zero alpha; a blank GL buffer is fully transparent.
-    const hasContent = (src: CanvasImageSource): boolean => {
-      if (!sctx) return true;
-      try {
-        sctx.clearRect(0, 0, 24, 24);
-        sctx.drawImage(src, 0, 0, 24, 24);
-        const data = sctx.getImageData(0, 0, 24, 24).data;
-        let maxAlpha = 0;
-        let varied = false;
-        const first = data[0];
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] > maxAlpha) maxAlpha = data[i + 3];
-          if (data[i] !== first) varied = true;
-        }
-        // accept once something is painted; allow a solid frame only after a grace window
-        return maxAlpha > 4 && (varied || performance.now() - start > 1400);
-      } catch {
-        return false;
-      }
-    };
-
     const tick = () => {
       if (settled) return;
       const el = ref.current;
-      const mount = el && isPaperShaderElement(el) ? el.paperShaderMount : undefined;
+      const mount = getPaperMount(el);
       const canvas = mount?.canvasElement;
       const sized = !!canvas && canvas.width > 0 && canvas.height > 0;
       const elapsed = performance.now() - start;
@@ -96,7 +76,7 @@ export function ExportRenderer({
         /* noop */
       }
 
-      if (elapsed < MIN_SETTLE || !hasContent(canvas!)) {
+      if (elapsed < MIN_SETTLE || !sampler.hasContent(canvas!, elapsed)) {
         if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
         else finish(false);
         return;
@@ -131,17 +111,8 @@ export function ExportRenderer({
     const begin = () => {
       if (!settled) requestAnimationFrame(tick);
     };
-    if (imageUrl) {
-      const pre = new Image();
-      pre.src = imageUrl;
-      if (pre.decode) pre.decode().then(begin, begin);
-      else {
-        pre.onload = begin;
-        pre.onerror = begin;
-      }
-    } else {
-      begin();
-    }
+    if (imageUrl) preloadImage(imageUrl, begin);
+    else begin();
 
     return () => {
       settled = true;

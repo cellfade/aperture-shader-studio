@@ -222,24 +222,42 @@ input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
 }
+/* Thumb is demoted to muted gray so it never out-shines the shader; full
+   white is reserved for hover/active only. */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 16px;
   height: 16px;
   margin-top: -5px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 9999px;
-  background: #e8ebf0;
+  background: #aab2c0;
   cursor: ew-resize;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 input[type="range"]::-moz-range-thumb {
   width: 16px;
   height: 16px;
-  border: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 9999px;
-  background: #e8ebf0;
+  background: #aab2c0;
   cursor: ew-resize;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+input[type="range"]:hover::-webkit-slider-thumb,
+input[type="range"]:active::-webkit-slider-thumb {
+  background: #e8ebf0;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+input[type="range"]:hover::-moz-range-thumb,
+input[type="range"]:active::-moz-range-thumb {
+  background: #e8ebf0;
+  border-color: rgba(255, 255, 255, 0.5);
 }
 input[type="range"]::-webkit-slider-runnable-track {
   height: 6px;

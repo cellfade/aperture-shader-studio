@@ -2,9 +2,16 @@
 
 import { useCallback, useRef, useState } from "react";
 import { captureVideoFrame } from "@/lib/studio/capture-frame";
+import { clampToMaxSide } from "@/lib/studio/download";
+import { zipAndDownloadFrames } from "@/lib/studio/zip-frames";
+import type { BatchFrame } from "@/components/studio/batch-export-renderer";
 
 const FOCUS =
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
+const MIN_FRAMES = 2;
+const MAX_FRAMES = 30;
+const DEFAULT_FRAMES = 8;
 
 function fmt(t: number): string {
   if (!Number.isFinite(t)) return "0:00";
@@ -20,44 +27,78 @@ function stamp(t: number): string {
 }
 
 /** Resolve once the video has finished seeking (so the drawn frame is the target one). */
-function awaitSeeked(v: HTMLVideoElement, timeoutMs = 1500): Promise<void> {
+function awaitSeeked(
+  v: HTMLVideoElement,
+  signal?: AbortSignal,
+  timeoutMs = 1500,
+): Promise<void> {
   if (!v.seeking && v.readyState >= 2) return Promise.resolve();
   return new Promise((resolve) => {
     let done = false;
+    let timer = 0;
     const finish = () => {
       if (done) return;
       done = true;
+      window.clearTimeout(timer);
       v.removeEventListener("seeked", finish);
+      signal?.removeEventListener("abort", finish);
       resolve();
     };
     v.addEventListener("seeked", finish, { once: true });
-    window.setTimeout(finish, timeoutMs);
+    signal?.addEventListener("abort", finish, { once: true });
+    timer = window.setTimeout(finish, timeoutMs);
   });
+}
+
+/** Seek to `t` and resolve once that exact frame is presented (awaiting 'seeked'). */
+function seekTo(v: HTMLVideoElement, t: number, signal?: AbortSignal): Promise<void> {
+  v.currentTime = t;
+  return awaitSeeked(v, signal);
 }
 
 interface VideoStageProps {
   src: string;
-  initialTime?: number;
+  /** Lazily read the start time (called at mount) — avoids reading a ref during render. */
+  getInitialTime?: () => number;
   onMeta?: (w: number, h: number, duration: number) => void;
   onTime?: (t: number) => void;
   onCapture: (url: string, w: number, h: number, label: string) => void;
   onError?: (msg: string) => void;
+  /** Render extracted frames through the active shader → ordered PNG blobs (null = failed). */
+  renderSequence?: (
+    frames: BatchFrame[],
+    onProgress: (rendered: number, total: number) => void,
+    signal: AbortSignal,
+  ) => Promise<Blob[] | null>;
+  /** Active shader id, used for the zip filename. */
+  shaderId?: string;
 }
 
 export function VideoStage({
   src,
-  initialTime = 0,
+  getInitialTime,
   onMeta,
   onTime,
   onCapture,
   onError,
+  renderSequence,
+  shaderId,
 }: VideoStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrubbing = useRef(false);
   const [playing, setPlaying] = useState(false);
-  const [current, setCurrent] = useState(initialTime);
+  const [current, setCurrent] = useState(() => getInitialTime?.() ?? 0);
   const [duration, setDuration] = useState(0);
   const [busy, setBusy] = useState(false);
+
+  // ── sequence export state ──────────────────────────────────────
+  const [seqOpen, setSeqOpen] = useState(false);
+  const [inTime, setInTime] = useState(0);
+  const [outTime, setOutTime] = useState(0);
+  const [count, setCount] = useState(DEFAULT_FRAMES);
+  const [running, setRunning] = useState(false);
+  const [seqStatus, setSeqStatus] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
 
   const seekable = Number.isFinite(duration) && duration > 0;
 
@@ -66,15 +107,20 @@ export function VideoStage({
     if (!v) return;
     const d = Number.isFinite(v.duration) ? v.duration : 0;
     setDuration(d);
-    if (d > 0) onMeta?.(v.videoWidth, v.videoHeight, d);
+    if (d > 0) {
+      onMeta?.(v.videoWidth, v.videoHeight, d);
+      // default the sequence out-point to the full clip the first time we learn it
+      setOutTime((prev) => (prev > 0 ? prev : d));
+    }
   };
 
   const handleLoadedMeta = () => {
     const v = videoRef.current;
     if (!v) return;
     syncDuration();
-    if (initialTime > 0 && Number.isFinite(v.duration) && initialTime < v.duration) {
-      v.currentTime = initialTime;
+    const it = getInitialTime?.() ?? 0;
+    if (it > 0 && Number.isFinite(v.duration) && it < v.duration) {
+      v.currentTime = it;
     }
   };
 
@@ -101,10 +147,23 @@ export function VideoStage({
     onTime?.(clamped);
   };
 
+  // Step one frame using requestVideoFrameCallback for an exact single-frame
+  // advance where available; otherwise fall back to a ~1/30s nudge.
   const step = (dir: number) => {
     const v = videoRef.current;
     if (!v) return;
     if (!v.paused) v.pause();
+    const rvfc = typeof v.requestVideoFrameCallback === "function";
+    if (rvfc && dir > 0) {
+      // forward: let the decoder present the very next frame, then sync to its time
+      v.requestVideoFrameCallback((_now, meta) => {
+        const t = typeof meta.mediaTime === "number" ? meta.mediaTime : v.currentTime;
+        setCurrent(t);
+        onTime?.(t);
+      });
+      seek(v.currentTime + 1 / 60); // smallest reliable nudge; rVFC reports the real landing time
+      return;
+    }
     seek(v.currentTime + dir / 30); // ~1 frame nudge (no stable fps API)
   };
 
@@ -144,6 +203,87 @@ export function VideoStage({
       setBusy(false);
     }
   }, [busy, onCapture, onError]);
+
+  // ── sequence export ────────────────────────────────────────────
+  const seqValid =
+    seekable && outTime > inTime && count >= MIN_FRAMES && count <= MAX_FRAMES;
+
+  const setIn = () => setInTime(current);
+  const setOut = () => setOutTime(current);
+
+  const cancelSequence = () => {
+    abortRef.current?.abort();
+  };
+
+  const runSequence = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v || running || !renderSequence) return;
+    const n = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(count)));
+    const lo = Math.max(0, Math.min(inTime, outTime));
+    const hi = Math.min(duration, Math.max(inTime, outTime));
+    if (!(hi > lo)) return;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const { signal } = controller;
+
+    v.pause();
+    setRunning(true);
+    const created: string[] = [];
+    let done = false;
+
+    const cleanup = () => {
+      for (const url of created) URL.revokeObjectURL(url);
+    };
+
+    try {
+      const frames: BatchFrame[] = [];
+      for (let i = 0; i < n; i++) {
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+        setSeqStatus(`Extracting ${i + 1}/${n}…`);
+        const t = lo + ((hi - lo) * i) / (n - 1);
+        await seekTo(v, t, signal);
+        if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+        const cap = await captureVideoFrame(v);
+        created.push(cap.url);
+        const { width, height } = clampToMaxSide(cap.w, cap.h);
+        frames.push({ imageUrl: cap.url, width, height });
+      }
+
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      setSeqStatus(`Rendering 1/${n}…`);
+      const blobs = await renderSequence(
+        frames,
+        (rendered, total) => setSeqStatus(`Rendering ${rendered}/${total}…`),
+        signal,
+      );
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      if (!blobs || blobs.length === 0) {
+        onError?.("Sequence render failed — try fewer frames or another shader.");
+        setSeqStatus("");
+        return;
+      }
+
+      setSeqStatus("Packaging…");
+      await zipAndDownloadFrames(blobs, `frames-${shaderId ?? "shader"}.zip`);
+      done = true;
+      setSeqStatus(`Saved ${blobs.length} frames ✓`);
+      window.setTimeout(() => setSeqStatus((s) => (s.startsWith("Saved") ? "" : s)), 2400);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setSeqStatus("Cancelled");
+        window.setTimeout(() => setSeqStatus((s) => (s === "Cancelled" ? "" : s)), 1600);
+      } else {
+        onError?.("Couldn't export the sequence — try a shorter range.");
+        setSeqStatus("");
+      }
+    } finally {
+      cleanup();
+      if (!done) setSeqStatus((s) => (s.startsWith("Rendering") || s.startsWith("Extracting") || s === "Packaging…" ? "" : s));
+      setRunning(false);
+      abortRef.current = null;
+    }
+  }, [running, renderSequence, count, inTime, outTime, duration, shaderId, onError]);
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -222,6 +362,19 @@ export function VideoStage({
           <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
             {fmt(current)} / {fmt(duration)}
           </span>
+          {renderSequence && (
+            <button
+              type="button"
+              onClick={() => setSeqOpen((v) => !v)}
+              aria-expanded={seqOpen}
+              aria-controls="sequence-panel"
+              className={`shrink-0 rounded-md border border-border px-3 py-2 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors hover:bg-foreground/10 ${
+                seqOpen ? "bg-foreground/10 text-foreground" : "text-muted-foreground"
+              } ${FOCUS}`}
+            >
+              Sequence
+            </button>
+          )}
           <button
             type="button"
             onClick={capture}
@@ -236,6 +389,94 @@ export function VideoStage({
           </button>
         </div>
       </div>
+
+      {/* sequence export panel */}
+      {renderSequence && seqOpen && (
+        <div
+          id="sequence-panel"
+          className="mt-3 flex flex-col gap-3 rounded-md border border-border bg-foreground/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={setIn}
+              disabled={running || !seekable}
+              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+            >
+              Set in
+            </button>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              in {fmt(inTime)}
+            </span>
+            <button
+              type="button"
+              onClick={setOut}
+              disabled={running || !seekable}
+              className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+            >
+              Set out
+            </button>
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              out {fmt(outTime)}
+            </span>
+            <label className="ms-1 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+              Frames
+              <input
+                type="number"
+                inputMode="numeric"
+                min={MIN_FRAMES}
+                max={MAX_FRAMES}
+                value={count}
+                disabled={running}
+                aria-label="Frame count (2 to 30)"
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  if (Number.isNaN(n)) setCount(MIN_FRAMES);
+                  else setCount(Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, n)));
+                }}
+                className={`w-14 rounded-md border border-border bg-transparent px-2 py-1 text-center font-mono text-[12px] tabular-nums text-foreground disabled:opacity-50 ${FOCUS}`}
+              />
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {running ? (
+              <>
+                <span className="font-mono text-[11px] tabular-nums text-foreground">
+                  {seqStatus}
+                </span>
+                <button
+                  type="button"
+                  onClick={cancelSequence}
+                  className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 ${FOCUS}`}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                {seqStatus && (
+                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {seqStatus}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={runSequence}
+                  disabled={!seqValid}
+                  className={`rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-50 ${FOCUS}`}
+                >
+                  Export {Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(count)))} frames
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="sr-only" role="status" aria-live="polite">
+            {seqStatus}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

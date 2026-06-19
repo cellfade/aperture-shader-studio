@@ -11,6 +11,10 @@ import { CompareSlider } from "@/components/compare-slider";
 import { ControlPanel } from "@/components/studio/control-panel";
 import { ShaderView } from "@/components/studio/shader-view";
 import { ExportRenderer } from "@/components/studio/export-renderer";
+import {
+  BatchExportRenderer,
+  type BatchFrame,
+} from "@/components/studio/batch-export-renderer";
 import { VideoStage } from "@/components/studio/video-stage";
 import {
   SHADERS_BY_ID,
@@ -70,6 +74,16 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     height: number;
     filename: string;
   }>(null);
+
+  const [batchReq, setBatchReq] = useState<null | {
+    shaderId: string;
+    values: ParamValues;
+    frames: BatchFrame[];
+  }>(null);
+  const batchResolve = useRef<((blobs: Blob[] | null) => void) | null>(null);
+  const sequenceProgressRef = useRef<
+    ((rendered: number, total: number) => void) | null
+  >(null);
 
   const fileInput = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<string | null>(null);
@@ -280,6 +294,32 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     [flashNotice],
   );
 
+  // Render extracted video frames through the active shader off-screen and
+  // resolve the ordered PNG blobs. Mounts a single BatchExportRenderer; the
+  // AbortSignal lets VideoStage cancel mid-run.
+  const renderSequence = useCallback(
+    (
+      frames: BatchFrame[],
+      onProgress: (rendered: number, total: number) => void,
+      signal: AbortSignal,
+    ): Promise<Blob[] | null> => {
+      sequenceProgressRef.current = onProgress;
+      return new Promise<Blob[] | null>((resolve) => {
+        const settle = (blobs: Blob[] | null) => {
+          if (!batchResolve.current) return;
+          batchResolve.current = null;
+          sequenceProgressRef.current = null;
+          setBatchReq(null);
+          resolve(blobs);
+        };
+        batchResolve.current = settle;
+        signal.addEventListener("abort", () => settle(null), { once: true });
+        setBatchReq({ shaderId: activeId, values, frames });
+      });
+    },
+    [activeId, values],
+  );
+
   // ── export ───────────────────────────────────────────────────
   const startExport = () => {
     if (exportStatus === "working") return;
@@ -426,13 +466,16 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
             <VideoStage
               key={videoUrl}
               src={videoUrl!}
-              initialTime={lastVideoTime.current}
+              getInitialTime={() => lastVideoTime.current}
               onMeta={onVideoMeta}
               onTime={(t) => {
                 lastVideoTime.current = t;
               }}
               onCapture={onCaptureFrame}
               onError={flashNotice}
+              // sequence export only makes sense for image-filter shaders (generative ignores the frame)
+              renderSequence={shader.takesImage ? renderSequence : undefined}
+              shaderId={activeId}
             />
           ) : (
             <PreviewBox ar={ar}>
@@ -499,6 +542,16 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
           height={exportReq.height}
           filename={exportReq.filename}
           onDone={onExportDone}
+        />
+      )}
+
+      {batchReq && (
+        <BatchExportRenderer
+          shader={SHADERS_BY_ID[batchReq.shaderId]}
+          values={batchReq.values}
+          frames={batchReq.frames}
+          onProgress={(i, total) => sequenceProgressRef.current?.(i, total)}
+          onDone={(blobs) => batchResolve.current?.(blobs)}
         />
       )}
     </div>

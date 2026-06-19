@@ -42,12 +42,15 @@ export class ExportEncoder {
   private finished = false;
 
   constructor(opts: ExportEncoderOptions) {
-    const { width, height, fps } = opts;
+    const { width, height } = opts;
     if (width % 2 !== 0 || height % 2 !== 0) {
       throw new Error(
         `encoder dimensions must be even, got ${width}x${height}`,
       );
     }
+    // mp4-muxer requires an integer frameRate; guard against a fractional or
+    // out-of-range fps reaching the muxer regardless of what the caller passed.
+    const fps = Math.min(120, Math.max(1, Math.round(opts.fps)));
     const bitrate = opts.bitrate ?? computeBitrate(width, height, fps);
 
     this.target = new ArrayBufferTarget();

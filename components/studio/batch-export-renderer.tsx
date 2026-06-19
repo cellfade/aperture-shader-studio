@@ -106,11 +106,17 @@ export function BatchExportRenderer({
         /* noop */
       }
 
-      if (elapsed < MIN_SETTLE || !sampler.hasContent(canvas!, elapsed)) {
+      // Each frame re-keys the shader element (fresh blank GL buffer) AND uses a
+      // fresh per-index sampler, so there is never a stale prior frame in this
+      // buffer — hasChanged sees no prior presented signature and degrades to a
+      // presence check, identical to the old hasContent gate. Kept on the
+      // consolidated API so the readback gate lives in one place.
+      if (elapsed < MIN_SETTLE || !sampler.hasChanged(canvas!, elapsed)) {
         if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
         else fail();
         return;
       }
+      sampler.markPresented();
 
       if (reading) return;
       reading = true;

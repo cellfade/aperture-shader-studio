@@ -268,19 +268,33 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   }, []);
 
   // ── shader + param updates ───────────────────────────────────
-  const selectShader = (id: string) => {
+  // Stable identities (useCallback): ControlPanel forwards `changeParam` to
+  // every ParamControl as its `onChange`, and ParamControl is memoized — a fresh
+  // function each render would defeat that memo and re-render all sibling
+  // controls on every drag tick. `shader` is derived from `activeId`, so
+  // [activeId] fully covers the closures below.
+  const selectShader = useCallback((id: string) => {
     setActiveId(id);
     setValuesByShader((prev) =>
       prev[id] ? prev : { ...prev, [id]: initialValues(SHADERS_BY_ID[id]) },
     );
-  };
-  const changeParam = (name: string, value: ParamValue) =>
-    setValuesByShader((prev) => ({
-      ...prev,
-      [activeId]: { ...(prev[activeId] ?? initialValues(shader)), [name]: value },
-    }));
-  const replaceValues = (next: ParamValues) =>
-    setValuesByShader((prev) => ({ ...prev, [activeId]: next }));
+  }, []);
+  const changeParam = useCallback(
+    (name: string, value: ParamValue) =>
+      setValuesByShader((prev) => ({
+        ...prev,
+        [activeId]: {
+          ...(prev[activeId] ?? initialValues(SHADERS_BY_ID[activeId])),
+          [name]: value,
+        },
+      })),
+    [activeId],
+  );
+  const replaceValues = useCallback(
+    (next: ParamValues) =>
+      setValuesByShader((prev) => ({ ...prev, [activeId]: next })),
+    [activeId],
+  );
 
   // ── video capture ────────────────────────────────────────────
   const onCaptureFrame = useCallback(

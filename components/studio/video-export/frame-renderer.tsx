@@ -202,20 +202,26 @@ function FrameRendererImpl(
         try {
           mount.setUniforms({ u_image: blobUrlImg.img });
 
-          // Readback-gate: wait until the composited canvas is non-blank.
+          // Readback-gate (change-detecting): the GL buffer PERSISTS across every
+          // frame, so a pure presence check could accept a stale prior frame if
+          // this upload silently failed. Wait until the composited canvas is
+          // non-blank AND its signature differs from the last presented frame
+          // (first frame degrades to presence; identical-frame fallback past the
+          // grace window is preserved inside hasChanged).
           await new Promise<void>((resolve, reject) => {
             const gateStart = performance.now();
             const tick = () => {
               const elapsed = performance.now() - gateStart;
               if (
                 elapsed >= MIN_SETTLE_MS &&
-                sampler.hasContent(canvas, elapsed)
+                sampler.hasChanged(canvas, elapsed)
               ) {
+                sampler.markPresented();
                 resolve();
                 return;
               }
               if (elapsed >= MAX_WAIT_MS) {
-                reject(new Error("frame never produced non-blank content"));
+                reject(new Error("frame never produced changed content"));
                 return;
               }
               requestAnimationFrame(tick);

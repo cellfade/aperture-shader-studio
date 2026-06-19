@@ -80,7 +80,7 @@ export function ControlPanel({
                 key={p.name}
                 param={p}
                 value={values[p.name]}
-                onChange={(v) => onChange(p.name, v)}
+                onChange={onChange}
               />
             ))}
             {toggleParams.length > 0 && (
@@ -105,7 +105,7 @@ export function ControlPanel({
                 key={p.name}
                 param={p}
                 value={values[p.name]}
-                onChange={(v) => onChange(p.name, v)}
+                onChange={onChange}
               />
             ))}
           </Section>

@@ -213,7 +213,11 @@ export async function encodeFilteredVideo(
       outSec,
       signal,
       onInfo: (info) => {
-        fps = info.fps > 0 ? info.fps : fps;
+        // The muxer requires an integer frameRate, and detected fps is often
+        // fractional (29.97, 23.976) or — for variable-rate / canvas-captured
+        // clips — wildly off. Round and clamp to a sane positive-integer range
+        // so the encoder/muxer always get a valid rate.
+        if (info.fps > 0) fps = Math.min(120, Math.max(1, Math.round(info.fps)));
         infoDims = { width: info.width, height: info.height };
       },
       onFrame: async (decoded) => {

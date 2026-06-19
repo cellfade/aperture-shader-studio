@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useCallback } from "react";
 import type { Param, ParamValue } from "@/lib/studio/registry";
 
 const FOCUS =
@@ -13,10 +14,23 @@ function fmt(value: number, step: number): string {
 interface Props {
   param: Param;
   value: ParamValue;
-  onChange: (v: ParamValue) => void;
+  /**
+   * Panel-level setter, keyed by param name. Receiving `(name, value)` (rather
+   * than a per-param `(value)` arrow created at the call site) lets the parent
+   * pass ONE stable callback to every control, so React.memo below actually
+   * holds during a slider drag and only the dragged control re-renders.
+   */
+  onChange: (name: string, value: ParamValue) => void;
 }
 
-export function ParamControl({ param, value, onChange }: Props) {
+function ParamControlImpl({ param, value, onChange }: Props) {
+  // Bind this control's name to the stable panel-level setter. Memoized on
+  // [onChange, param.name] — both stable across renders — so the leaf handlers
+  // below keep a stable identity and don't defeat the memo.
+  const set = useCallback(
+    (v: ParamValue) => onChange(param.name, v),
+    [onChange, param.name],
+  );
   switch (param.control) {
     case "range": {
       const v = typeof value === "number" && Number.isFinite(value) ? value : param.min;
@@ -38,13 +52,13 @@ export function ParamControl({ param, value, onChange }: Props) {
             aria-valuetext={`${param.label} ${fmt(v, param.step)}`}
             onChange={(e) => {
               const n = parseFloat(e.target.value);
-              if (Number.isFinite(n)) onChange(n);
+              if (Number.isFinite(n)) set(n);
             }}
-            onDoubleClick={() => onChange(param.default)}
+            onDoubleClick={() => set(param.default)}
             onKeyDown={(e) => {
               if (e.key === "Backspace" || e.key === "Delete") {
                 e.preventDefault();
-                onChange(param.default);
+                set(param.default);
               }
             }}
             className="mt-2.5 h-1 w-full cursor-ew-resize rounded-full bg-border outline-none"
@@ -61,7 +75,7 @@ export function ParamControl({ param, value, onChange }: Props) {
           role="switch"
           aria-checked={on}
           aria-label={param.label}
-          onClick={() => onChange(!on)}
+          onClick={() => set(!on)}
           className={`flex w-full items-center justify-between rounded-md py-1 text-left ${FOCUS}`}
         >
           <span className="text-[13px] text-foreground/80">{param.label}</span>
@@ -90,7 +104,7 @@ export function ParamControl({ param, value, onChange }: Props) {
             <select
               value={cur}
               aria-label={param.label}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => set(e.target.value)}
               className={`mt-2 w-full rounded-md border border-border bg-secondary px-2 py-1.5 font-mono text-[12px] text-foreground outline-none ${FOCUS}`}
             >
               {param.options.map((opt) => (
@@ -108,7 +122,7 @@ export function ParamControl({ param, value, onChange }: Props) {
                     key={opt}
                     type="button"
                     aria-pressed={active}
-                    onClick={() => onChange(opt)}
+                    onClick={() => set(opt)}
                     className={`rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${FOCUS} ${
                       active
                         ? "border-foreground/30 bg-foreground/10 text-foreground"
@@ -137,7 +151,7 @@ export function ParamControl({ param, value, onChange }: Props) {
             <Swatch
               color={hex}
               label={param.label}
-              onChange={(c) => onChange(c)}
+              onChange={(c) => set(c)}
             />
           </span>
         </label>
@@ -149,7 +163,7 @@ export function ParamControl({ param, value, onChange }: Props) {
       const setAt = (i: number, hex: string) => {
         const next = [...colors];
         next[i] = hex;
-        onChange(next);
+        set(next);
       };
       return (
         <div className="flex items-center justify-between">
@@ -172,6 +186,16 @@ export function ParamControl({ param, value, onChange }: Props) {
       return null;
   }
 }
+
+/**
+ * Memoized so a slider drag re-renders only the dragged control, not every
+ * sibling. The parent (control-panel) passes a stable `param` (from
+ * `shader.params`), the per-param `value`, and ONE stable `onChange` setter, so
+ * only the control whose `value` actually changed fails the shallow prop
+ * comparison and re-renders.
+ */
+export const ParamControl = memo(ParamControlImpl);
+ParamControl.displayName = "ParamControl";
 
 /** A small color swatch with a ≥40px touch target and a visible focus ring. */
 function Swatch({

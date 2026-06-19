@@ -76,11 +76,16 @@ export function ExportRenderer({
         /* noop */
       }
 
-      if (elapsed < MIN_SETTLE || !sampler.hasContent(canvas!, elapsed)) {
+      // Single-frame export: a fresh off-screen mount + fresh sampler, so there
+      // is no prior presented signature — hasChanged degrades to a presence
+      // check on this first frame (identical to the old hasContent gate). Using
+      // the consolidated change-detecting gate keeps all three cores in step.
+      if (elapsed < MIN_SETTLE || !sampler.hasChanged(canvas!, elapsed)) {
         if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
         else finish(false);
         return;
       }
+      sampler.markPresented();
 
       if (reading) return;
       reading = true;

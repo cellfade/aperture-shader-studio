@@ -15,13 +15,44 @@ Vetting corrections (already done / dropped): **#4** (MP4 fallback `aria-live`) 
 
 ## Phase B — Performance
 - #30 Kill per-frame PNG `toBlob`→`decode` roundtrip (reuse one `ImageBitmap`/canvas); make the readback gate **content-change-detecting** (fixes the transient duplicate-frame flake); reuse one scratch canvas.
-- Web Worker + OffscreenCanvas offload for the long-export render→encode loop (keep main thread responsive).
+- ~~Web Worker + OffscreenCanvas offload for the long-export render→encode loop (keep main thread responsive).~~ **Deferred — blocked by the library (see note below).**
 - #22/#23 memoize `ParamControl` / stabilize `ShaderView` props so slider drags don't re-render siblings / re-mount the GL view.
 - (#31 decode backpressure already landed in the video-export QA pass — verify, don't redo.)
 
 ## Phase C — Tests + CI
 - #36 Vitest + RTL baseline; unit tests for `registry` (param normalization/initialValues/categories), `download` (clampToMaxSide/even dims), `zip-frames` padding (#11/#12). Playwright smoke on the studio page.
 - #37 GitHub Actions CI: lint + typecheck + build (+ tests). #13 wire `test` script.
+
+### Phase B — deferred: worker / OffscreenCanvas offload
+
+Investigated against the real library source
+(`node_modules/@paper-design/shaders/dist/shader-mount.js`). **Not feasible
+without forking `@paper-design/shaders`.** `ShaderMount` is hard-wired to the
+main-thread DOM:
+
+- creates its `<canvas>` internally via `ownerDocument.createElement("canvas")`
+  and `parentElement.prepend(canvas)` — there is **no constructor/prop hook to
+  hand it a pre-made `OffscreenCanvas`**; the React `ShaderMount` wrapper has no
+  such option either;
+- depends on `ResizeObserver.observe(parentElement)`, `visualViewport`,
+  `window.devicePixelRatio`, and `document.addEventListener("visibilitychange")`
+  for sizing/render scheduling — none of which exist in a Worker;
+- stashes itself on `parentElement.paperShaderMount`, which our render cores read
+  back via `getPaperMount()` — there is no DOM element in a Worker to attach to.
+
+**What would unblock it:** upstream support for an OffscreenCanvas render target
+(e.g. a `ShaderMount` option accepting an `OffscreenCanvas` + explicit
+width/height/DPR instead of measuring a DOM parent, and dropping the
+DOM-observer/visibilitychange coupling). A hacky port was explicitly not
+attempted.
+
+**Responsiveness (the actual goal) is already met on the main thread.** The MP4
+export loop in `encode-filtered-video.ts` yields to the event loop on every
+frame: each `RenderCore.render()` awaits `sourceToImageWithUrl` (a `toBlob`
+Promise + `img.decode()`) **and** a `requestAnimationFrame`-driven readback gate,
+and the decode side (`frame-source.ts`) awaits a `dequeue`/8ms tick per chunk —
+so `onProgress` and UI paint stay live throughout long exports. No extra
+`scheduler.yield()` was needed.
 
 ## Deferred (documented, not in this program)
 #45 extract `studio.tsx` into hooks; #33 consolidate the triplicated readiness/readback; #16 type the dynamic registry (drop `as any`); plus the lower-value a11y polish (#41 thumb 24px, #42 disabled contrast, #43 progress throttle, #44 12px floor) and direction features (presets, URL-state) — tracked in `audit-findings.md`.

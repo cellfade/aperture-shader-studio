@@ -23,7 +23,7 @@ import {
   type ParamValue,
   type ParamValues,
 } from "@/lib/studio/registry";
-import { clampToMaxSide, GENERATIVE_EXPORT } from "@/lib/studio/download";
+import { clampToMaxSide, downloadBlob, GENERATIVE_EXPORT } from "@/lib/studio/download";
 
 interface LoadedImage {
   url: string;
@@ -88,6 +88,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const imageUrlRef = useRef<string | null>(null);
   const videoUrlRef = useRef<string | null>(null);
+  const videoFileRef = useRef<File | null>(null);
   const lastVideoTime = useRef(0);
   const dragDepth = useRef(0);
 
@@ -139,6 +140,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
           URL.revokeObjectURL(videoUrlRef.current);
           videoUrlRef.current = null;
         }
+        videoFileRef.current = null;
         setVideoUrl(null);
         setVideoName(null);
         setVideoDims(null);
@@ -173,6 +175,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       const url = URL.createObjectURL(file);
       if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
       videoUrlRef.current = url;
+      videoFileRef.current = file;
       if (imageUrlRef.current) {
         URL.revokeObjectURL(imageUrlRef.current);
         imageUrlRef.current = null;
@@ -318,6 +321,35 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       });
     },
     [activeId, values],
+  );
+
+  // Encode the in/out range of the loaded clip through the active shader to an
+  // MP4 and download it. The heavy WebCodecs pipeline is dynamically imported so
+  // it stays out of the initial bundle until the user actually exports a video.
+  const runVideoExport = useCallback(
+    async (
+      inSec: number,
+      outSec: number,
+      onProgress: (done: number, total: number) => void,
+      signal: AbortSignal,
+    ): Promise<void> => {
+      const file = videoFileRef.current;
+      if (!file) return;
+      const { encodeFilteredVideo } = await import(
+        "@/lib/studio/video-export/encode-filtered-video"
+      );
+      const { blob } = await encodeFilteredVideo({
+        file,
+        shaderId: activeId,
+        values,
+        inSec,
+        outSec,
+        onProgress,
+        signal,
+      });
+      downloadBlob(blob, `${activeId}-${(videoName ?? "video").replace(/\.[^.]+$/, "")}.mp4`);
+    },
+    [activeId, values, videoName],
   );
 
   // ── export ───────────────────────────────────────────────────
@@ -475,6 +507,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
               onError={flashNotice}
               // sequence export only makes sense for image-filter shaders (generative ignores the frame)
               renderSequence={shader.takesImage ? renderSequence : undefined}
+              exportVideo={shader.takesImage ? runVideoExport : undefined}
               shaderId={activeId}
             />
           ) : (

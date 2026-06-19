@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { captureVideoFrame } from "@/lib/studio/capture-frame";
 import { clampToMaxSide } from "@/lib/studio/download";
 import { zipAndDownloadFrames } from "@/lib/studio/zip-frames";
@@ -70,6 +70,13 @@ interface VideoStageProps {
     onProgress: (rendered: number, total: number) => void,
     signal: AbortSignal,
   ) => Promise<Blob[] | null>;
+  /** Encode the in/out range through the active shader to an MP4 and download it. */
+  exportVideo?: (
+    inSec: number,
+    outSec: number,
+    onProgress: (done: number, total: number) => void,
+    signal: AbortSignal,
+  ) => Promise<void>;
   /** Active shader id, used for the zip filename. */
   shaderId?: string;
 }
@@ -82,6 +89,7 @@ export function VideoStage({
   onCapture,
   onError,
   renderSequence,
+  exportVideo,
   shaderId,
 }: VideoStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -99,6 +107,34 @@ export function VideoStage({
   const [running, setRunning] = useState(false);
   const [seqStatus, setSeqStatus] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+
+  // ── mp4 export state ───────────────────────────────────────────
+  const [videoExportOk, setVideoExportOk] = useState(false);
+  const [vidRunning, setVidRunning] = useState(false);
+  const [vidStatus, setVidStatus] = useState("");
+  const vidAbortRef = useRef<AbortController | null>(null);
+
+  // Probe WebCodecs H.264 support without importing the heavy export module.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("VideoEncoder" in window)) return;
+    let cancelled = false;
+    VideoEncoder.isConfigSupported({
+      codec: "avc1.42001f",
+      width: 1280,
+      height: 720,
+      bitrate: 1_000_000,
+      framerate: 30,
+    })
+      .then((res) => {
+        if (!cancelled) setVideoExportOk(res.supported === true);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoExportOk(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const seekable = Number.isFinite(duration) && duration > 0;
 
@@ -285,6 +321,57 @@ export function VideoStage({
     }
   }, [running, renderSequence, count, inTime, outTime, duration, shaderId, onError]);
 
+  // ── mp4 export ─────────────────────────────────────────────────
+  const vidValid = seekable && outTime > inTime;
+  // While either export runs, the in/out markers + frame count are locked.
+  const anyRunning = running || vidRunning;
+
+  const cancelVideoExport = () => {
+    vidAbortRef.current?.abort();
+  };
+
+  const runVideoExport = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v || vidRunning || !exportVideo) return;
+    const lo = Math.max(0, Math.min(inTime, outTime));
+    const hi = Math.min(duration, Math.max(inTime, outTime));
+    if (!(hi > lo)) return;
+
+    const controller = new AbortController();
+    vidAbortRef.current = controller;
+    const { signal } = controller;
+
+    v.pause();
+    setVidRunning(true);
+    setVidStatus("Preparing…");
+    let done = false;
+
+    try {
+      await exportVideo(
+        lo,
+        hi,
+        (rendered, total) => setVidStatus(`Rendering ${rendered}/${total}…`),
+        signal,
+      );
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      done = true;
+      setVidStatus("Saved ✓");
+      window.setTimeout(() => setVidStatus((s) => (s === "Saved ✓" ? "" : s)), 2400);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setVidStatus("Cancelled");
+        window.setTimeout(() => setVidStatus((s) => (s === "Cancelled" ? "" : s)), 1600);
+      } else {
+        onError?.("Couldn't export the video — try a shorter range or another shader.");
+        setVidStatus("");
+      }
+    } finally {
+      if (!done) setVidStatus((s) => (s.startsWith("Rendering") || s === "Preparing…" ? "" : s));
+      setVidRunning(false);
+      vidAbortRef.current = null;
+    }
+  }, [vidRunning, exportVideo, inTime, outTime, duration, onError]);
+
   return (
     <div className="flex h-full w-full flex-col">
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
@@ -362,7 +449,7 @@ export function VideoStage({
           <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
             {fmt(current)} / {fmt(duration)}
           </span>
-          {renderSequence && (
+          {(renderSequence || exportVideo) && (
             <button
               type="button"
               onClick={() => setSeqOpen((v) => !v)}
@@ -390,8 +477,8 @@ export function VideoStage({
         </div>
       </div>
 
-      {/* sequence export panel */}
-      {renderSequence && seqOpen && (
+      {/* sequence + mp4 export panel */}
+      {(renderSequence || exportVideo) && seqOpen && (
         <div
           id="sequence-panel"
           className="mt-3 flex flex-col gap-3 rounded-md border border-border bg-foreground/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between"
@@ -400,7 +487,7 @@ export function VideoStage({
             <button
               type="button"
               onClick={setIn}
-              disabled={running || !seekable}
+              disabled={anyRunning || !seekable}
               className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
             >
               Set in
@@ -411,7 +498,7 @@ export function VideoStage({
             <button
               type="button"
               onClick={setOut}
-              disabled={running || !seekable}
+              disabled={anyRunning || !seekable}
               className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
             >
               Set out
@@ -419,61 +506,89 @@ export function VideoStage({
             <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
               out {fmt(outTime)}
             </span>
-            <label className="ms-1 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-              Frames
-              <input
-                type="number"
-                inputMode="numeric"
-                min={MIN_FRAMES}
-                max={MAX_FRAMES}
-                value={count}
-                disabled={running}
-                aria-label="Frame count (2 to 30)"
-                onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  if (Number.isNaN(n)) setCount(MIN_FRAMES);
-                  else setCount(Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, n)));
-                }}
-                className={`w-14 rounded-md border border-border bg-transparent px-2 py-1 text-center font-mono text-[12px] tabular-nums text-foreground disabled:opacity-50 ${FOCUS}`}
-              />
-            </label>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {running ? (
-              <>
-                <span className="font-mono text-[11px] tabular-nums text-foreground">
-                  {seqStatus}
-                </span>
-                <button
-                  type="button"
-                  onClick={cancelSequence}
-                  className={`rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 ${FOCUS}`}
-                >
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <>
-                {seqStatus && (
-                  <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-                    {seqStatus}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={runSequence}
-                  disabled={!seqValid}
-                  className={`rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-50 ${FOCUS}`}
-                >
-                  Export {Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(count)))} frames
-                </button>
-              </>
+            {renderSequence && (
+              <label className="ms-1 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                Frames
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_FRAMES}
+                  max={MAX_FRAMES}
+                  value={count}
+                  disabled={anyRunning}
+                  aria-label="Frame count (2 to 30)"
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isNaN(n)) setCount(MIN_FRAMES);
+                    else setCount(Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, n)));
+                  }}
+                  className={`w-14 rounded-md border border-border bg-transparent px-2 py-1 text-center font-mono text-[12px] tabular-nums text-foreground disabled:opacity-50 ${FOCUS}`}
+                />
+              </label>
             )}
           </div>
 
+          <div className="flex flex-wrap items-center gap-3">
+            {(running || vidRunning || seqStatus || vidStatus) && (
+              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                {running ? seqStatus : vidRunning ? vidStatus : vidStatus || seqStatus}
+              </span>
+            )}
+            {/* Frames → zip (secondary, outline). Persistent button: toggles to Cancel so focus is never lost on completion. */}
+            {renderSequence && (
+              <button
+                type="button"
+                onClick={running ? cancelSequence : runSequence}
+                disabled={running ? false : !seqValid || vidRunning}
+                aria-label={running ? "Cancel frame export" : "Export frames as a zip"}
+                title={
+                  !running && (!seqValid || vidRunning)
+                    ? vidRunning
+                      ? "Another export is running"
+                      : "Set an out-point after the in-point"
+                    : undefined
+                }
+                className={`rounded-md border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-50 ${FOCUS}`}
+              >
+                {running ? "Cancel" : "Frames · zip"}
+              </button>
+            )}
+            {/* Video → mp4 (primary, filled). */}
+            {exportVideo && videoExportOk && (
+              <button
+                type="button"
+                onClick={vidRunning ? cancelVideoExport : runVideoExport}
+                disabled={vidRunning ? false : !vidValid || running}
+                aria-label={vidRunning ? "Cancel MP4 export" : "Export filtered video as MP4"}
+                title={
+                  !vidRunning && (!vidValid || running)
+                    ? running
+                      ? "Another export is running"
+                      : "Set an out-point after the in-point"
+                    : undefined
+                }
+                className={`rounded-md border border-foreground/30 bg-foreground/[0.08] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 disabled:opacity-50 ${FOCUS}`}
+              >
+                {vidRunning ? "Cancel" : "Video · mp4"}
+              </button>
+            )}
+          </div>
+
+          {exportVideo && !videoExportOk && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="font-mono text-[11px] text-foreground/70 sm:basis-full"
+            >
+              MP4 export needs Chrome, Edge, or Safari — frame zip works everywhere.
+            </p>
+          )}
+
           <div className="sr-only" role="status" aria-live="polite">
             {seqStatus}
+          </div>
+          <div className="sr-only" role="status" aria-live="polite">
+            {vidStatus}
           </div>
         </div>
       )}

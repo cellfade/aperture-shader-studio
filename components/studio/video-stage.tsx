@@ -5,6 +5,7 @@ import { captureVideoFrame } from "@/lib/studio/capture-frame";
 import { clampToMaxSide } from "@/lib/studio/download";
 import { zipAndDownloadFrames } from "@/lib/studio/zip-frames";
 import type { BatchFrame } from "@/components/studio/batch-export-renderer";
+import { VideoExporterLoadError } from "@/components/studio/use-video-export";
 
 const FOCUS =
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -361,6 +362,11 @@ export function VideoStage({
       if (err instanceof DOMException && err.name === "AbortError") {
         setVidStatus("Cancelled");
         window.setTimeout(() => setVidStatus((s) => (s === "Cancelled" ? "" : s)), 1600);
+      } else if (err instanceof VideoExporterLoadError) {
+        // #24: the exporter chunk failed to load — distinct from an encode
+        // failure, so surface the connectivity-oriented message.
+        onError?.(err.message);
+        setVidStatus("");
       } else {
         onError?.("Couldn't export the video — try a shorter range or another shader.");
         setVidStatus("");

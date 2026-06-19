@@ -1,53 +1,20 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { CompareSlider } from "@/components/compare-slider";
 import { ControlPanel } from "@/components/studio/control-panel";
 import { ShaderView } from "@/components/studio/shader-view";
 import { ExportRenderer } from "@/components/studio/export-renderer";
-import {
-  BatchExportRenderer,
-  type BatchFrame,
-} from "@/components/studio/batch-export-renderer";
+import { BatchExportRenderer } from "@/components/studio/batch-export-renderer";
 import { VideoStage } from "@/components/studio/video-stage";
+import { SHADERS_BY_ID } from "@/lib/studio/registry";
+import { IMAGE_ACCEPT, VIDEO_ACCEPT } from "@/lib/studio/upload-validation";
 import {
-  SHADERS_BY_ID,
-  initialValues,
-  DEFAULT_SHADER_ID,
-  type ParamValue,
-  type ParamValues,
-} from "@/lib/studio/registry";
-import {
-  clampToMaxSide,
-  downloadBlob,
-  GENERATIVE_EXPORT,
-  sanitizeFilename,
-} from "@/lib/studio/download";
-import {
-  IMAGE_ACCEPT,
-  VIDEO_ACCEPT,
-  validateImageFile,
-  validateVideoFile,
-  validateDecodedImage,
-  isVideoTooLong,
-} from "@/lib/studio/upload-validation";
-
-interface LoadedImage {
-  url: string;
-  isBlob: boolean;
-  w: number;
-  h: number;
-  name: string;
-}
-
-type Mode = "photo" | "video";
-type ExportStatus = "idle" | "working" | "done" | "error";
+  useStudioState,
+  type LoadedImage,
+  type Mode,
+} from "@/components/studio/use-studio-state";
+import { useVideoExport } from "@/components/studio/use-video-export";
 
 const ACCEPT_ATTR = [...IMAGE_ACCEPT, ...VIDEO_ACCEPT].join(",");
 
@@ -59,50 +26,59 @@ function humanize(id: string) {
 }
 
 export function Studio({ sampleSrc }: { sampleSrc: string }) {
-  const [mode, setMode] = useState<Mode>("photo");
-  const [image, setImage] = useState<LoadedImage | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoName, setVideoName] = useState<string | null>(null);
-  const [videoDims, setVideoDims] = useState<{ w: number; h: number } | null>(null);
-  const [videoStageOpen, setVideoStageOpen] = useState(false);
+  const studio = useStudioState();
+  const {
+    mode,
+    setMode,
+    image,
+    videoUrl,
+    videoName,
+    videoDims,
+    videoStageOpen,
+    setVideoStageOpen,
+    videoFileRef,
+    lastVideoTimeRef,
+    shader,
+    values,
+    activeId,
+    selectShader,
+    changeParam,
+    replaceValues,
+    compareOn,
+    setCompareOn,
+    dragging,
+    notice,
+    announce,
+    announceMsg,
+    flashNotice,
+    commitImage,
+    ingest,
+    onCaptureFrame,
+    onVideoMeta,
+  } = studio;
 
-  const [activeId, setActiveId] = useState(DEFAULT_SHADER_ID);
-  const [valuesByShader, setValuesByShader] = useState<Record<string, ParamValues>>(
-    () => ({ [DEFAULT_SHADER_ID]: initialValues(SHADERS_BY_ID[DEFAULT_SHADER_ID]) }),
-  );
-  const [compareOn, setCompareOn] = useState(true);
-  const [dragging, setDragging] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [announce, setAnnounce] = useState("");
-  const [exportStatus, setExportStatus] = useState<ExportStatus>("idle");
-  const [exportReq, setExportReq] = useState<null | {
-    shaderId: string;
-    values: ParamValues;
-    imageUrl: string | null;
-    width: number;
-    height: number;
-    filename: string;
-  }>(null);
-
-  const [batchReq, setBatchReq] = useState<null | {
-    shaderId: string;
-    values: ParamValues;
-    frames: BatchFrame[];
-  }>(null);
-  const batchResolve = useRef<((blobs: Blob[] | null) => void) | null>(null);
-  const sequenceProgressRef = useRef<
-    ((rendered: number, total: number) => void) | null
-  >(null);
+  const {
+    exportStatus,
+    exportReq,
+    startExport,
+    onExportDone,
+    batchReq,
+    renderSequence,
+    onBatchProgress,
+    onBatchDone,
+    runVideoExport,
+  } = useVideoExport({
+    activeId,
+    values,
+    shader,
+    image,
+    videoName,
+    videoFileRef,
+    flashNotice,
+    announceMsg,
+  });
 
   const fileInput = useRef<HTMLInputElement>(null);
-  const imageUrlRef = useRef<string | null>(null);
-  const videoUrlRef = useRef<string | null>(null);
-  const videoFileRef = useRef<File | null>(null);
-  const lastVideoTime = useRef(0);
-  const dragDepth = useRef(0);
-
-  const shader = SHADERS_BY_ID[activeId];
-  const values = valuesByShader[activeId] ?? initialValues(shader);
 
   const stageOpen = mode === "video" && !!videoUrl && videoStageOpen;
   const showVideoDrop = mode === "video" && !videoUrl;
@@ -117,310 +93,6 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       : 16 / 10;
   const canCompare = shader.category === "image-filter" && !!image && !stageOpen;
   const showCompare = canCompare && compareOn;
-
-  const announceMsg = (msg: string) => setAnnounce(`${msg} ​`);
-  const flashNotice = useCallback((msg: string) => {
-    setNotice(msg);
-    setAnnounce(`${msg} ​`);
-    window.setTimeout(() => setNotice((n) => (n === msg ? null : n)), 3200);
-  }, []);
-
-  const commitImage = useCallback((next: LoadedImage) => {
-    if (imageUrlRef.current && imageUrlRef.current !== next.url) {
-      URL.revokeObjectURL(imageUrlRef.current);
-    }
-    imageUrlRef.current = next.isBlob ? next.url : null;
-    setImage(next);
-    setAnnounce(`Loaded ${next.name}, ${next.w} by ${next.h} pixels ​`);
-  }, []);
-
-  const loadImageFile = useCallback(
-    (file: File) => {
-      const check = validateImageFile(file);
-      if (!check.ok) {
-        flashNotice(check.message);
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        const dims = validateDecodedImage({
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-        });
-        if (!dims.ok) {
-          URL.revokeObjectURL(url);
-          flashNotice(dims.message);
-          return;
-        }
-        setMode("photo");
-        // abandoning any loaded video for an image source — release it
-        if (videoUrlRef.current) {
-          URL.revokeObjectURL(videoUrlRef.current);
-          videoUrlRef.current = null;
-        }
-        videoFileRef.current = null;
-        setVideoUrl(null);
-        setVideoName(null);
-        setVideoDims(null);
-        setVideoStageOpen(false);
-        commitImage({
-          url,
-          isBlob: true,
-          w: img.naturalWidth,
-          h: img.naturalHeight,
-          name: file.name || "image",
-        });
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        flashNotice("Couldn't read that image. Try another file.");
-      };
-      img.src = url;
-    },
-    [commitImage, flashNotice],
-  );
-
-  const loadVideoFile = useCallback(
-    (file: File) => {
-      const check = validateVideoFile(file);
-      if (!check.ok) {
-        flashNotice(check.message);
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
-      videoUrlRef.current = url;
-      videoFileRef.current = file;
-      if (imageUrlRef.current) {
-        URL.revokeObjectURL(imageUrlRef.current);
-        imageUrlRef.current = null;
-      }
-      setImage(null);
-      lastVideoTime.current = 0;
-      setVideoDims(null);
-      setVideoName(file.name || "video");
-      setVideoUrl(url);
-      setVideoStageOpen(true);
-      setMode("video");
-      setAnnounce(`Loaded video ${file.name} ​`);
-    },
-    [flashNotice],
-  );
-
-  const ingest = useCallback(
-    (file: File) => {
-      if (file.type.startsWith("video/")) loadVideoFile(file);
-      else loadImageFile(file);
-    },
-    [loadVideoFile, loadImageFile],
-  );
-
-  // drag-drop + paste anywhere
-  useEffect(() => {
-    const hasFiles = (e: DragEvent) =>
-      Array.from(e.dataTransfer?.types ?? []).includes("Files");
-    const onDragOver = (e: DragEvent) => {
-      if (hasFiles(e)) e.preventDefault();
-    };
-    const onDragEnter = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      dragDepth.current += 1;
-      setDragging(true);
-    };
-    const onDragLeave = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      dragDepth.current = Math.max(0, dragDepth.current - 1);
-      if (dragDepth.current === 0) setDragging(false);
-    };
-    const onDrop = (e: DragEvent) => {
-      e.preventDefault();
-      dragDepth.current = 0;
-      setDragging(false);
-      const file = e.dataTransfer?.files?.[0];
-      if (file) ingest(file);
-    };
-    const onDragEnd = () => {
-      dragDepth.current = 0;
-      setDragging(false);
-    };
-    const onPaste = (e: ClipboardEvent) => {
-      const item = Array.from(e.clipboardData?.items ?? []).find(
-        (i) => i.type.startsWith("image/") || i.type.startsWith("video/"),
-      );
-      const file = item?.getAsFile();
-      if (file) {
-        e.preventDefault();
-        ingest(file);
-      }
-    };
-    window.addEventListener("dragover", onDragOver);
-    window.addEventListener("dragenter", onDragEnter);
-    window.addEventListener("dragleave", onDragLeave);
-    window.addEventListener("drop", onDrop);
-    window.addEventListener("dragend", onDragEnd);
-    window.addEventListener("paste", onPaste);
-    return () => {
-      window.removeEventListener("dragover", onDragOver);
-      window.removeEventListener("dragenter", onDragEnter);
-      window.removeEventListener("dragleave", onDragLeave);
-      window.removeEventListener("drop", onDrop);
-      window.removeEventListener("dragend", onDragEnd);
-      window.removeEventListener("paste", onPaste);
-    };
-  }, [ingest]);
-
-  useEffect(() => {
-    return () => {
-      if (imageUrlRef.current) URL.revokeObjectURL(imageUrlRef.current);
-      if (videoUrlRef.current) URL.revokeObjectURL(videoUrlRef.current);
-    };
-  }, []);
-
-  // ── shader + param updates ───────────────────────────────────
-  // Stable identities (useCallback): ControlPanel forwards `changeParam` to
-  // every ParamControl as its `onChange`, and ParamControl is memoized — a fresh
-  // function each render would defeat that memo and re-render all sibling
-  // controls on every drag tick. `shader` is derived from `activeId`, so
-  // [activeId] fully covers the closures below.
-  const selectShader = useCallback((id: string) => {
-    setActiveId(id);
-    setValuesByShader((prev) =>
-      prev[id] ? prev : { ...prev, [id]: initialValues(SHADERS_BY_ID[id]) },
-    );
-  }, []);
-  const changeParam = useCallback(
-    (name: string, value: ParamValue) =>
-      setValuesByShader((prev) => ({
-        ...prev,
-        [activeId]: {
-          ...(prev[activeId] ?? initialValues(SHADERS_BY_ID[activeId])),
-          [name]: value,
-        },
-      })),
-    [activeId],
-  );
-  const replaceValues = useCallback(
-    (next: ParamValues) =>
-      setValuesByShader((prev) => ({ ...prev, [activeId]: next })),
-    [activeId],
-  );
-
-  // ── video capture ────────────────────────────────────────────
-  const onCaptureFrame = useCallback(
-    (url: string, w: number, h: number, label: string) => {
-      commitImage({ url, isBlob: true, w, h, name: `frame-${label}.png` });
-      setVideoStageOpen(false);
-      announceMsg(`Captured frame at ${label}`);
-    },
-    [commitImage],
-  );
-
-  const onVideoMeta = useCallback(
-    (w: number, h: number, duration: number) => {
-      setVideoDims({ w, h });
-      if (isVideoTooLong(duration)) {
-        flashNotice("Long clip — scrubbing may be heavy. Capture still works.");
-      }
-    },
-    [flashNotice],
-  );
-
-  // Render extracted video frames through the active shader off-screen and
-  // resolve the ordered PNG blobs. Mounts a single BatchExportRenderer; the
-  // AbortSignal lets VideoStage cancel mid-run.
-  const renderSequence = useCallback(
-    (
-      frames: BatchFrame[],
-      onProgress: (rendered: number, total: number) => void,
-      signal: AbortSignal,
-    ): Promise<Blob[] | null> => {
-      sequenceProgressRef.current = onProgress;
-      return new Promise<Blob[] | null>((resolve) => {
-        const settle = (blobs: Blob[] | null) => {
-          if (!batchResolve.current) return;
-          batchResolve.current = null;
-          sequenceProgressRef.current = null;
-          setBatchReq(null);
-          resolve(blobs);
-        };
-        batchResolve.current = settle;
-        signal.addEventListener("abort", () => settle(null), { once: true });
-        setBatchReq({ shaderId: activeId, values, frames });
-      });
-    },
-    [activeId, values],
-  );
-
-  // Encode the in/out range of the loaded clip through the active shader to an
-  // MP4 and download it. The heavy WebCodecs pipeline is dynamically imported so
-  // it stays out of the initial bundle until the user actually exports a video.
-  const runVideoExport = useCallback(
-    async (
-      inSec: number,
-      outSec: number,
-      onProgress: (done: number, total: number) => void,
-      signal: AbortSignal,
-    ): Promise<void> => {
-      const file = videoFileRef.current;
-      if (!file) return;
-      const { encodeFilteredVideo } = await import(
-        "@/lib/studio/video-export/encode-filtered-video"
-      );
-      const { blob } = await encodeFilteredVideo({
-        file,
-        shaderId: activeId,
-        values,
-        inSec,
-        outSec,
-        onProgress,
-        signal,
-      });
-      downloadBlob(
-        blob,
-        `${activeId}-${sanitizeFilename((videoName ?? "video").replace(/\.[^.]+$/, ""))}.mp4`,
-      );
-    },
-    [activeId, values, videoName],
-  );
-
-  // ── export ───────────────────────────────────────────────────
-  const startExport = () => {
-    if (exportStatus === "working") return;
-    let width: number;
-    let height: number;
-    let clamped = false;
-    if (shader.category === "generative" || !image) {
-      ({ width, height } = GENERATIVE_EXPORT);
-    } else {
-      ({ width, height, clamped } = clampToMaxSide(image.w, image.h));
-    }
-    if (clamped) flashNotice(`Large image — exported at ${width}×${height}.`);
-    setExportStatus("working");
-    announceMsg("Rendering export");
-    // Atomic snapshot: shaderId, values, imageUrl, and the derived width/height
-    // are all frozen into exportReq here at click time. ExportRenderer reads
-    // only from exportReq.*, so switching shader/image mid-render can't desync
-    // the exported dimensions.
-    setExportReq({
-      shaderId: activeId,
-      values,
-      imageUrl: image?.url ?? null,
-      width,
-      height,
-      filename: image
-        ? `${activeId}-${sanitizeFilename(image.name.replace(/\.[^.]+$/, ""))}.png`
-        : `${activeId}.png`,
-    });
-  };
-  const onExportDone = (success: boolean) => {
-    setExportReq(null);
-    setExportStatus(success ? "done" : "error");
-    if (success) announceMsg("Export saved");
-    else flashNotice("Export failed — try a smaller image or another shader.");
-    window.setTimeout(() => setExportStatus("idle"), 1600);
-  };
 
   const browse = () => fileInput.current?.click();
   const canDownload =
@@ -537,10 +209,10 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
             <VideoStage
               key={videoUrl}
               src={videoUrl!}
-              getInitialTime={() => lastVideoTime.current}
+              getInitialTime={() => lastVideoTimeRef.current}
               onMeta={onVideoMeta}
               onTime={(t) => {
-                lastVideoTime.current = t;
+                lastVideoTimeRef.current = t;
               }}
               onCapture={onCaptureFrame}
               onError={flashNotice}
@@ -622,8 +294,8 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
           shader={SHADERS_BY_ID[batchReq.shaderId]}
           values={batchReq.values}
           frames={batchReq.frames}
-          onProgress={(i, total) => sequenceProgressRef.current?.(i, total)}
-          onDone={(blobs) => batchResolve.current?.(blobs)}
+          onProgress={onBatchProgress}
+          onDone={onBatchDone}
         />
       )}
     </div>

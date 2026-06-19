@@ -16,6 +16,26 @@ export const MAX_EXPORT_SIDE = 8192;
 /** Generative shaders have no source photo — export at this 16:10 canvas. */
 export const GENERATIVE_EXPORT = { width: 2000, height: 1250 };
 
+/**
+ * Make a user-supplied name safe to use inside a download filename: strip path
+ * separators and control/unsafe characters, collapse whitespace to single
+ * underscores, and trim. Returns "file" if nothing usable remains.
+ */
+export function sanitizeFilename(name: string): string {
+  const cleaned = name
+    // path separators
+    .replace(/[/\\]+/g, "-")
+    // control characters (0x00–0x1F and 0x7F)
+    .replace(/[\x00-\x1f\x7f]+/g, "")
+    // characters illegal/unsafe on common filesystems
+    .replace(/[<>:"|?*]+/g, "")
+    // collapse any run of whitespace to a single underscore
+    .replace(/\s+/g, "_")
+    // strip leading/trailing dots, dashes, and underscores
+    .replace(/^[.\-_]+|[.\-_]+$/g, "");
+  return cleaned || "file";
+}
+
 export function clampToMaxSide(w: number, h: number, max = MAX_EXPORT_SIDE) {
   const longest = Math.max(w, h);
   if (longest <= max) return { width: Math.round(w), height: Math.round(h), clamped: false };

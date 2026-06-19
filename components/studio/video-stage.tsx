@@ -376,7 +376,6 @@ export function VideoStage({
     <div className="flex h-full w-full flex-col">
       <div className="relative flex min-h-0 flex-1 items-center justify-center">
         {/* Muted, no-audio preview (no captions needed); never autoplays. */}
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
           src={src}
@@ -578,7 +577,7 @@ export function VideoStage({
             <p
               role="status"
               aria-live="polite"
-              className="font-mono text-[11px] text-foreground/70 sm:basis-full"
+              className="font-mono text-[11px] text-foreground/85 sm:basis-full"
             >
               MP4 export needs Chrome, Edge, or Safari — frame zip works everywhere.
             </p>

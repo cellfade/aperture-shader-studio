@@ -18,10 +18,26 @@ const spaceGrotesk = Space_Grotesk({
   weight: ["400", "500", "600", "700"],
 });
 
+const SITE_URL = "https://aperture.shaders.studio";
+const TITLE = "Aperture — Paper Shaders, in code";
+const DESCRIPTION =
+  "An optical lab for @paper-design/shaders-react. Drag the seam: one image, two realities.";
+
 export const metadata: Metadata = {
-  title: "Aperture — Paper Shaders, in code",
-  description:
-    "An optical lab for @paper-design/shaders-react. Drag the seam: one image, two realities.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: "website",
+    url: SITE_URL,
+    siteName: "Aperture",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

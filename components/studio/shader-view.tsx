@@ -1,23 +1,12 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import {
   getComponent,
   type Shader,
   type ParamValues,
 } from "@/lib/studio/registry";
-
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
-}
+import { useReducedMotion } from "@/lib/studio/use-media-query";
 
 interface ShaderViewProps {
   shader: Shader;
@@ -45,6 +34,10 @@ function ShaderViewImpl({ shader, values, imageUrl, className }: ShaderViewProps
     imageUrl ? " applied to the loaded photo" : ""
   }`;
 
+  // `Comp` is a stable registry component: `getComponent` is a module-level
+  // memoized lookup into the paper-shaders map, not a component created during
+  // render, so it is referentially stable across renders.
+  // eslint-disable-next-line react-hooks/static-components
   return <Comp className={className} role="img" aria-label={label} {...props} />;
 }
 

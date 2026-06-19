@@ -182,6 +182,17 @@ export async function encodeFilteredVideo(
     targetH = makeEven(clamped.height);
     usPerFrame = Math.round(1e6 / fps);
     estimatedTotal = Math.max(1, Math.round(rangeSec * fps));
+    // Verify the real (clamped + evened) export dims/codec are supported BEFORE
+    // building the render core and decoding frames, so we fail fast and clean
+    // rather than partway through the export.
+    const supported = await ExportEncoder.isSupported({
+      width: targetW,
+      height: targetH,
+      fps,
+    });
+    if (!supported) {
+      throw new Error("Unsupported export dimensions/codec");
+    }
     pipeline.core = await RenderCore.create({
       shaderId,
       values,

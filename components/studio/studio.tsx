@@ -23,7 +23,12 @@ import {
   type ParamValue,
   type ParamValues,
 } from "@/lib/studio/registry";
-import { clampToMaxSide, downloadBlob, GENERATIVE_EXPORT } from "@/lib/studio/download";
+import {
+  clampToMaxSide,
+  downloadBlob,
+  GENERATIVE_EXPORT,
+  sanitizeFilename,
+} from "@/lib/studio/download";
 
 interface LoadedImage {
   url: string;
@@ -347,7 +352,10 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
         onProgress,
         signal,
       });
-      downloadBlob(blob, `${activeId}-${(videoName ?? "video").replace(/\.[^.]+$/, "")}.mp4`);
+      downloadBlob(
+        blob,
+        `${activeId}-${sanitizeFilename((videoName ?? "video").replace(/\.[^.]+$/, ""))}.mp4`,
+      );
     },
     [activeId, values, videoName],
   );
@@ -366,13 +374,19 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     if (clamped) flashNotice(`Large image — exported at ${width}×${height}.`);
     setExportStatus("working");
     announceMsg("Rendering export");
+    // Atomic snapshot: shaderId, values, imageUrl, and the derived width/height
+    // are all frozen into exportReq here at click time. ExportRenderer reads
+    // only from exportReq.*, so switching shader/image mid-render can't desync
+    // the exported dimensions.
     setExportReq({
       shaderId: activeId,
       values,
       imageUrl: image?.url ?? null,
       width,
       height,
-      filename: image ? `${activeId}-${image.name.replace(/\.[^.]+$/, "")}.png` : `${activeId}.png`,
+      filename: image
+        ? `${activeId}-${sanitizeFilename(image.name.replace(/\.[^.]+$/, ""))}.png`
+        : `${activeId}.png`,
     });
   };
   const onExportDone = (success: boolean) => {
@@ -733,7 +747,7 @@ function DropPrompt({
         <button
           type="button"
           onClick={onSample}
-          className="mt-2 font-mono text-[11px] uppercase tracking-[0.14em] text-foreground/70 underline decoration-border underline-offset-4 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="mt-2 font-mono text-[11px] uppercase tracking-[0.14em] text-foreground/85 underline decoration-border underline-offset-4 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Or try a sample
         </button>

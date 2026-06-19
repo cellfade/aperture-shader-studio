@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CATEGORIES, SHADERS_BY_ID, type Shader } from "@/lib/studio/registry";
 
 const FOCUS =
@@ -15,11 +15,14 @@ export function ShaderPicker({
 }) {
   const activeCat = SHADERS_BY_ID[activeId]?.category ?? "image-filter";
   const [cat, setCat] = useState<Shader["category"]>(activeCat);
-
-  // follow programmatic shader changes that cross categories
-  useEffect(() => {
+  // Follow programmatic shader changes that cross categories. Adjusting derived
+  // state during render (with a previous-value guard) is the React-recommended
+  // pattern — avoids the setState-in-effect cascade.
+  const [prevActiveCat, setPrevActiveCat] = useState<Shader["category"]>(activeCat);
+  if (activeCat !== prevActiveCat) {
+    setPrevActiveCat(activeCat);
     setCat(activeCat);
-  }, [activeCat]);
+  }
 
   const group = CATEGORIES.find((c) => c.key === cat) ?? CATEGORIES[0];
 

@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useReducedMotion } from "@/lib/studio/use-media-query";
 
 interface CompareSliderProps {
   before: ReactNode;
   after: ReactNode;
   beforeLabel?: string;
   afterLabel?: string;
-  glow?: string;
 }
 
 export function CompareSlider({
@@ -15,8 +15,8 @@ export function CompareSlider({
   after,
   beforeLabel = "Original",
   afterLabel = "Filtered",
-  glow = "#e8ebf0",
 }: CompareSliderProps) {
+  const reduced = useReducedMotion();
   const [pos, setPos] = useState(9);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -30,18 +30,21 @@ export function CompareSlider({
     setPos(Math.max(0, Math.min(100, next)));
   }, []);
 
-  // One orchestrated reveal on load — the seam sweeps to rest. Skipped under reduced motion.
+  // One orchestrated reveal on load — the seam sweeps to rest. Under reduced
+  // motion it jumps straight to rest (still inside rAF, never a synchronous
+  // setState in the effect body).
   useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      setPos(56);
-      return;
-    }
     let raf = 0;
     let startedAt: number | null = null;
     const from = 9;
     const to = 56;
     const dur = 900;
+    if (reduced) {
+      raf = requestAnimationFrame(() => {
+        if (!touched.current) setPos(to);
+      });
+      return () => cancelAnimationFrame(raf);
+    }
     const tick = (t: number) => {
       if (touched.current) return;
       if (startedAt === null) startedAt = t;
@@ -52,7 +55,7 @@ export function CompareSlider({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [reduced]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     touched.current = true;

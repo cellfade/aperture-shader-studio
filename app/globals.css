@@ -151,7 +151,7 @@
   --secondary: #181d27;
   --secondary-foreground: #e6e9ee;
   --muted: #131720;
-  --muted-foreground: #98a1b0; /* mute — ≥4.5:1 on card */
+  --muted-foreground: #a7afbd; /* mute — 8.1:1 on card #131720 (clears AA 4.5:1) */
   --accent: #1a212c;
   --accent-foreground: #e6e9ee;
   --border: #232a35; /* hairline */

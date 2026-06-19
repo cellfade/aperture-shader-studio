@@ -17,15 +17,27 @@ the page comes from the shaders themselves.
 
 ## Verify before you finish
 
-All three must pass — this is the completion gate:
+All four must pass — this is the completion gate:
 
 ```bash
 npx eslint .        # 0 problems (there is no `next lint` — it was removed; use eslint)
 npx tsc --noEmit    # clean  (or: npm run typecheck)
 npx next build      # succeeds
+npm test            # vitest run — unit/component tests, all green
 ```
 
 `npm run lint:fix` is available for autofixable lint.
+
+Tests: **Vitest + Testing Library** drive the pure-logic + presentational-
+component suites (`*.test.ts[x]` co-located next to source; `vitest.config.ts`,
+`vitest.setup.ts`). The WebGL render cores are NOT unit-tested (paper-shaders
+needs a real GL context jsdom can't provide) — they're covered by the
+**Playwright** smoke test (`e2e/smoke.spec.ts`, run with `npm run test:e2e`),
+which loads the sample photo, applies the dithering filter, and asserts a real
+PNG download with zero console errors. `playwright.config.ts`'s `webServer`
+builds + starts the app automatically. CI runs all of this on every push/PR via
+`.github/workflows/ci.yml` (a `verify` job for lint/typecheck/build/test and a
+separate `e2e` job for the Playwright smoke).
 
 ## Architecture
 

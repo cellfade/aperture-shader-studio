@@ -14,6 +14,19 @@ import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 // hardware/software encoders and playable in <video>.
 const CODEC = "avc1.42001f";
 
+/**
+ * Coerce an arbitrary detected/requested frame rate into a positive integer in
+ * [1, 120]. The muxer rejects fractional or out-of-range rates with
+ * "Invalid video frame rate: must be a positive integer", so NTSC rates
+ * (29.97, 23.976, 59.94), variable-frame-rate junk, and non-finite values all
+ * pass through this single chokepoint. Non-finite input (NaN/±Infinity) falls
+ * back to 1.
+ */
+export function normalizeFps(n: number): number {
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(120, Math.max(1, Math.round(n)));
+}
+
 /** Bitrate heuristic: width*height*fps*0.07, clamped to [1Mbps, 20Mbps]. */
 export function computeBitrate(
   width: number,
@@ -50,7 +63,7 @@ export class ExportEncoder {
     }
     // mp4-muxer requires an integer frameRate; guard against a fractional or
     // out-of-range fps reaching the muxer regardless of what the caller passed.
-    const fps = Math.min(120, Math.max(1, Math.round(opts.fps)));
+    const fps = normalizeFps(opts.fps);
     const bitrate = opts.bitrate ?? computeBitrate(width, height, fps);
 
     this.target = new ArrayBufferTarget();

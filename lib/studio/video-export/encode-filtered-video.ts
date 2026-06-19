@@ -25,7 +25,7 @@ import {
 import { SHADERS_BY_ID, type ParamValues } from "@/lib/studio/registry";
 import { clampToMaxSide } from "@/lib/studio/download";
 import { decodeFramesInRange } from "./frame-source";
-import { ExportEncoder } from "./encoder";
+import { ExportEncoder, normalizeFps } from "./encoder";
 
 /** Hard cap on the exported range (seconds). */
 const MAX_RANGE_SEC = 30;
@@ -217,7 +217,7 @@ export async function encodeFilteredVideo(
         // fractional (29.97, 23.976) or — for variable-rate / canvas-captured
         // clips — wildly off. Round and clamp to a sane positive-integer range
         // so the encoder/muxer always get a valid rate.
-        if (info.fps > 0) fps = Math.min(120, Math.max(1, Math.round(info.fps)));
+        if (info.fps > 0) fps = normalizeFps(info.fps);
         infoDims = { width: info.width, height: info.height };
       },
       onFrame: async (decoded) => {

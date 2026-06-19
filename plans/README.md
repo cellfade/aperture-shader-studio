@@ -19,9 +19,8 @@ Vetting corrections (already done / dropped): **#4** (MP4 fallback `aria-live`) 
 - #22/#23 memoize `ParamControl` / stabilize `ShaderView` props so slider drags don't re-render siblings / re-mount the GL view.
 - (#31 decode backpressure already landed in the video-export QA pass — verify, don't redo.)
 
-## Phase C — Tests + CI
-- #36 Vitest + RTL baseline; unit tests for `registry` (param normalization/initialValues/categories), `download` (clampToMaxSide/even dims), `zip-frames` padding (#11/#12). Playwright smoke on the studio page.
-- #37 GitHub Actions CI: lint + typecheck + build (+ tests). #13 wire `test` script.
+## Phase C — Tests + CI ✅ done
+Landed: Vitest + Testing Library baseline (jsdom, `@`-alias) with **51 unit/component tests** — `download` (sanitizeFilename + clampToMaxSide), `registry` (param normalization, initialValues, CATEGORIES partition, getComponent), `zip-frames` (frame padding/ordering), `render-readiness` (content-sampler presence/change/grace-window via stubbed 2D ctx), a `normalizeFps` helper extracted from the Phase-B fix + used at both call sites (29.97→30, NaN→1, …), and one RTL test on `ParamControl` (range/boolean/enum → `onChange(name,value)`). One **Playwright** smoke (`e2e/smoke.spec.ts`, self-contained `webServer`) covering the WebGL path: sample → dithering → real PNG download, zero console errors — passes. **GitHub Actions** `ci.yml`: `verify` job (lint/typecheck/build/test) + separate `e2e` job (chromium), npm-cached, node 24. `test`/`test:watch`/`test:coverage`/`test:e2e` scripts wired. Closes #36, #37, #11, #12, #13.
 
 ### Phase B — deferred: worker / OffscreenCanvas offload
 

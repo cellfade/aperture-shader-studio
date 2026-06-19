@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aperture — Shader Studio
 
-## Getting Started
+A fully client-side web studio for running [`@paper-design/shaders-react`](https://shaders.paper.design/) WebGL shaders on your own photos. Drop in an image, pick any shader, tune every parameter live, drag the before/after seam, and export the result as a PNG at the original resolution — all in your browser. **Nothing is uploaded.**
 
-First, run the development server:
+Built with Next.js 16 (App Router), Tailwind v4, shadcn/ui, and TypeScript.
+
+## Features
+
+- **Bring your own photo** — drag-drop, click, or paste; processed entirely client-side via `createObjectURL` (no network).
+- **The whole library** — all 29 shaders, grouped into Image filters / Logo / Generative.
+- **Live controls** — per-shader sliders, color pickers, segmented enums, toggles, and palettes, generated from the shader catalog. Reset + Randomize.
+- **Before/after compare** — a draggable seam for image filters (pointer, touch, and keyboard accessible).
+- **Original-resolution PNG export** — an off-screen full-res render (`preserveDrawingBuffer`) read into a 2D canvas and downloaded.
+- **Responsive & accessible** — 360px → wide; WCAG-minded focus, ARIA, contrast, and `prefers-reduced-motion` support.
+
+## Develop
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> Pin `@paper-design/shaders-react` exactly — it ships breaking changes under `0.0.x` versioning.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project docs
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `docs/prds/` — product requirements
+- `docs/research-brief.md` — shader catalog, UX, and export research
+- `docs/qa/` — QA punch list + screenshots
 
-## Learn More
+## How it works
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Shaders are WebGL/canvas React components that run client-side. Image filters take the uploaded photo as a texture; generative shaders render their own art. The control panel is data-driven from `lib/shader-catalog.json` (derived from the package's type definitions). Export mounts a dedicated full-resolution instance off-screen, waits for a drawn frame, and reads the canvas into a PNG.

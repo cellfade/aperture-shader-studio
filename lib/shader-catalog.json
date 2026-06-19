@@ -1,0 +1,605 @@
+{
+  "shaders": [
+    {
+      "id": "mesh-gradient",
+      "component": "MeshGradient",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "purplePreset", "beachPreset", "inkPreset"],
+      "blurb": "Flowing multi-color mesh gradient with organic distortion and swirl.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colors", "control": "color", "note": "array up to 10; expose 1-3 swatches" },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.8 },
+        { "name": "swirl", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.6 },
+        { "name": "grainMixer", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "grainOverlay", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    },
+    {
+      "id": "smoke-ring",
+      "component": "SmokeRing",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "solarPreset", "linePreset", "cloudPreset"],
+      "blurb": "Radial multi-color gradient ring shaped with layered smoky noise.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "thickness", "control": "range", "min": 0.01, "max": 1, "step": 0.01, "default": 0.4 },
+        { "name": "radius", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "innerShape", "control": "range", "min": 0, "max": 4, "step": 0.01, "default": 1 },
+        { "name": "noiseScale", "control": "range", "min": 0.01, "max": 5, "step": 0.01, "default": 1.5 },
+        { "name": "noiseIterations", "control": "range", "min": 1, "max": 8, "step": 1, "default": 6 }
+      ]
+    },
+    {
+      "id": "neuro-noise",
+      "component": "NeuroNoise",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "sensationPreset", "bloodstreamPreset", "ghostPreset"],
+      "blurb": "Glowing web-like structure of fluid lines and soft intersections.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "colorMid", "control": "color", "default": "#6a5acd" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "brightness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.6 },
+        { "name": "contrast", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "dot-orbit",
+      "component": "DotOrbit",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "shinePreset", "bubblesPreset", "hallucinatoryPreset"],
+      "blurb": "Animated multi-color dots each orbiting around its grid cell center.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "sizeRange", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "spreading", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "stepsPerColor", "control": "range", "min": 1, "max": 4, "step": 1, "default": 1 }
+      ]
+    },
+    {
+      "id": "dot-grid",
+      "component": "DotGrid",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset"],
+      "blurb": "Static grid of circles, diamonds, squares or triangles.",
+      "params": [
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorFill", "control": "color", "default": "#ffffff" },
+        { "name": "colorStroke", "control": "color", "default": "#000000" },
+        { "name": "shape", "control": "enum", "options": ["circle", "diamond", "square", "triangle"], "default": "circle" },
+        { "name": "size", "control": "range", "min": 1, "max": 100, "step": 1, "default": 20, "note": "dotSize in px" },
+        { "name": "gapX", "control": "range", "min": 2, "max": 500, "step": 1, "default": 50 },
+        { "name": "gapY", "control": "range", "min": 2, "max": 500, "step": 1, "default": 50 },
+        { "name": "strokeWidth", "control": "range", "min": 0, "max": 50, "step": 1, "default": 0 },
+        { "name": "sizeRange", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "opacityRange", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    },
+    {
+      "id": "simplex-noise",
+      "component": "SimplexNoise",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "bubblegumPreset", "spotsPreset", "firstContactPreset"],
+      "blurb": "Multi-color gradient mapped into smooth animated simplex-noise curves.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "stepsPerColor", "control": "range", "min": 1, "max": 10, "step": 1, "default": 1 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "metaballs",
+      "component": "Metaballs",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "inkDropsPreset", "backgroundPreset", "solarPreset"],
+      "blurb": "Up to 20 colored gooey balls merging into smooth organic shapes.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 8" },
+        { "name": "count", "control": "range", "min": 1, "max": 20, "step": 1, "default": 8 },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "waves",
+      "component": "Waves",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "groovyPreset", "tangledUpPreset", "waveRidePreset"],
+      "blurb": "Static line pattern morphing from sharp zigzags to flowing waves.",
+      "params": [
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "shape", "control": "range", "min": 0, "max": 3, "step": 0.01, "default": 1, "note": "0=zigzag,1=sine,2-3=irregular" },
+        { "name": "amplitude", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "frequency", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "spacing", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "proportion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.2 }
+      ]
+    },
+    {
+      "id": "perlin-noise",
+      "component": "PerlinNoise",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "nintendoWaterPreset", "mossPreset", "wormsPreset"],
+      "blurb": "Classic animated 3D Perlin noise with exposed octave controls.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "proportion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "octaveCount", "control": "range", "min": 1, "max": 8, "step": 1, "default": 2 },
+        { "name": "persistence", "control": "range", "min": 0.3, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "lacunarity", "control": "range", "min": 1.5, "max": 10, "step": 0.1, "default": 2 }
+      ]
+    },
+    {
+      "id": "voronoi",
+      "component": "Voronoi",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "cellsPreset", "bubblesPreset", "lightsPreset"],
+      "blurb": "Anti-aliased animated Voronoi cells with customizable edges and glow.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colors", "control": "color", "note": "array up to 5" },
+        { "name": "colorGap", "control": "color", "default": "#000000" },
+        { "name": "colorGlow", "control": "color", "default": "#000000" },
+        { "name": "stepsPerColor", "control": "range", "min": 1, "max": 3, "step": 1, "default": 1 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 0.5, "step": 0.01, "default": 0.3 },
+        { "name": "gap", "control": "range", "min": 0, "max": 0.1, "step": 0.001, "default": 0.05 },
+        { "name": "glow", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "warp",
+      "component": "Warp",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "presetCauldron", "presetInk", "presetKelp", "presetNectar", "presetPassion"],
+      "blurb": "Color fields warped by noise and swirls over check/stripe/edge patterns.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "shape", "control": "enum", "options": ["checks", "stripes", "edge"], "default": "checks" },
+        { "name": "proportion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 1 },
+        { "name": "shapeScale", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.25 },
+        { "name": "swirl", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.9 },
+        { "name": "swirlIterations", "control": "range", "min": 0, "max": 20, "step": 1, "default": 10 }
+      ]
+    },
+    {
+      "id": "god-rays",
+      "component": "GodRays",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "warpPreset", "linearPreset", "etherPreset"],
+      "blurb": "Animated rays of light radiating from center, blended with up to 5 colors.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorBloom", "control": "color", "default": "#ffffff" },
+        { "name": "colors", "control": "color", "note": "array up to 5" },
+        { "name": "bloom", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "intensity", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "density", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "spotty", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "midSize", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "midIntensity", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "spiral",
+      "component": "Spiral",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "dropletPreset", "junglePreset", "swirlPreset"],
+      "blurb": "Single-color animated spiral morphing from crisp lines to whirlpool forms.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "density", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.2 },
+        { "name": "strokeWidth", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "strokeTaper", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "strokeCap", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "swirl",
+      "component": "Swirl",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "openingPreset", "jamesBondPreset", "candyPreset"],
+      "blurb": "Animated bands of color twisting into spirals, arcs and circular patterns.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "bandCount", "control": "range", "min": 0, "max": 15, "step": 1, "default": 4 },
+        { "name": "twist", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "center", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "proportion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "dithering",
+      "component": "Dithering",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "sinePreset", "bugsPreset", "ripplePreset", "swirlPreset", "warpPreset"],
+      "blurb": "Animated 2-color dithering over noise, warp, dots, wave, ripple, swirl or sphere.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "shape", "control": "enum", "options": ["simplex", "warp", "dots", "wave", "ripple", "swirl", "sphere"], "default": "simplex" },
+        { "name": "type", "control": "enum", "options": ["random", "2x2", "4x4", "8x8"], "default": "4x4" },
+        { "name": "size", "control": "range", "min": 0.5, "max": 20, "step": 0.1, "default": 2, "note": "pixel grid size (u_pxSize)" }
+      ]
+    },
+    {
+      "id": "grain-gradient",
+      "component": "GrainGradient",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "wavePreset", "dotsPreset", "truchetPreset", "ripplePreset", "blobPreset"],
+      "blurb": "Multi-color grainy gradient in 7 animated abstract forms.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 7" },
+        { "name": "shape", "control": "enum", "options": ["wave", "dots", "truchet", "corners", "ripple", "blob", "sphere"], "default": "wave" },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "intensity", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "noise", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "pulsing-border",
+      "component": "PulsingBorder",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "circlePreset", "northernLightsPreset", "solidLinePreset"],
+      "blurb": "Luminous trails of color merging into a glowing animated border contour.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 5" },
+        { "name": "roundness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "thickness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.1 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "intensity", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "bloom", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "spots", "control": "range", "min": 1, "max": 20, "step": 1, "default": 4 },
+        { "name": "pulse", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    },
+    {
+      "id": "color-panels",
+      "component": "ColorPanels",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "glassPreset", "gradientPreset", "openingPreset"],
+      "blurb": "Pseudo-3D semi-transparent panels rotating around a central axis.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "colors", "control": "color", "note": "array up to 7" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "density", "control": "range", "min": 0.25, "max": 7, "step": 0.05, "default": 1 },
+        { "name": "angle1", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "angle2", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "length", "control": "range", "min": 0, "max": 3, "step": 0.01, "default": 1 },
+        { "name": "blur", "control": "range", "min": 0, "max": 0.5, "step": 0.01, "default": 0 },
+        { "name": "gradient", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "edges", "control": "boolean", "default": false }
+      ]
+    },
+    {
+      "id": "static-mesh-gradient",
+      "component": "StaticMeshGradient",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "seaPreset", "sixtiesPreset", "sunsetPreset"],
+      "blurb": "Static multi-point mesh gradient with two-direction wave warping and grain.",
+      "params": [
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "positions", "control": "range", "min": 0, "max": 100, "step": 1, "default": 2 },
+        { "name": "waveX", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "waveXShift", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "waveY", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "waveYShift", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "mixing", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "grainMixer", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "grainOverlay", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    },
+    {
+      "id": "static-radial-gradient",
+      "component": "StaticRadialGradient",
+      "category": "generative",
+      "takesImage": false,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "crossSectionPreset", "radialPreset", "loFiPreset"],
+      "blurb": "Radial gradient of up to 10 colors with focal point, falloff and distortion.",
+      "params": [
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "radius", "control": "range", "min": 0, "max": 3, "step": 0.01, "default": 1 },
+        { "name": "focalDistance", "control": "range", "min": 0, "max": 3, "step": 0.01, "default": 0 },
+        { "name": "focalAngle", "control": "range", "min": 0, "max": 360, "step": 1, "default": 0 },
+        { "name": "falloff", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "mixing", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "distortionFreq", "control": "range", "min": 0, "max": 20, "step": 0.5, "default": 5 }
+      ]
+    },
+    {
+      "id": "paper-texture",
+      "component": "PaperTexture",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "abstractPreset", "cardboardPreset", "detailsPreset"],
+      "blurb": "Static layered-noise paper/cardboard texture, usable standalone or over an image.",
+      "params": [
+        { "name": "image", "control": "boolean", "note": "optional image source (HTMLImageElement|string)" },
+        { "name": "colorFront", "control": "color", "default": "#000000" },
+        { "name": "colorBack", "control": "color", "default": "#ffffff" },
+        { "name": "contrast", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "roughness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "fiber", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "fiberSize", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "crumples", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "folds", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "foldCount", "control": "range", "min": 1, "max": 15, "step": 1, "default": 4 },
+        { "name": "fade", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    },
+    {
+      "id": "fluted-glass",
+      "component": "FlutedGlass",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "wavesPreset", "abstractPreset", "foldsPreset"],
+      "blurb": "Fluted-glass image filter producing streaked, ribbed refractive distortions.",
+      "params": [
+        { "name": "image", "control": "boolean", "note": "image source (HTMLImageElement|string)" },
+        { "name": "shape", "control": "enum", "options": ["lines", "linesIrregular", "wave", "zigzag", "pattern"], "default": "lines" },
+        { "name": "distortionShape", "control": "enum", "options": ["prism", "lens", "contour", "cascade", "flat"], "default": "lens" },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "angle", "control": "range", "min": 0, "max": 180, "step": 1, "default": 90 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "shift", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "blur", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "edges", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.2 },
+        { "name": "shadows", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "highlights", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 }
+      ]
+    },
+    {
+      "id": "water",
+      "component": "Water",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "abstractPreset", "streamingPreset", "slowMoPreset"],
+      "blurb": "Water-surface caustic distortion, as an image filter or standalone texture.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "image", "control": "boolean", "note": "optional image source" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorHighlight", "control": "color", "default": "#ffffff" },
+        { "name": "highlights", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "layering", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "edges", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "caustic", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "waves", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "size", "control": "range", "min": 0.01, "max": 7, "step": 0.01, "default": 2 }
+      ]
+    },
+    {
+      "id": "image-dithering",
+      "component": "ImageDithering",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "retroPreset", "noisePreset", "naturalPreset"],
+      "blurb": "Dithering image filter with 4 modes and 2/3/multi-color palettes.",
+      "params": [
+        { "name": "image", "control": "boolean", "note": "image source (required)" },
+        { "name": "colorFront", "control": "color", "default": "#ffffff" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorHighlight", "control": "color", "default": "#ffffff" },
+        { "name": "type", "control": "enum", "options": ["random", "2x2", "4x4", "8x8"], "default": "4x4" },
+        { "name": "size", "control": "range", "min": 0.5, "max": 20, "step": 0.1, "default": 2, "note": "pixel grid size (u_pxSize)" },
+        { "name": "colorSteps", "control": "range", "min": 1, "max": 7, "step": 1, "default": 1 },
+        { "name": "originalColors", "control": "boolean", "default": false },
+        { "name": "inverted", "control": "boolean", "default": false }
+      ]
+    },
+    {
+      "id": "heatmap",
+      "component": "Heatmap",
+      "category": "logo",
+      "takesImage": true,
+      "hasMeta": true,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "sepiaPreset"],
+      "blurb": "Glowing animated gradient of heat flowing through an input image shape.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "image", "control": "boolean", "note": "image source (required)" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colors", "control": "color", "note": "array up to 10" },
+        { "name": "contour", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "angle", "control": "range", "min": 0, "max": 360, "step": 1, "default": 0 },
+        { "name": "noise", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "innerGlow", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "outerGlow", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "liquid-metal",
+      "component": "LiquidMetal",
+      "category": "logo",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "noirPreset", "fullScreenPreset", "stripesPreset"],
+      "blurb": "Futuristic liquid-metal material over a logo or predefined shape.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "image", "control": "boolean", "note": "optional image source" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorTint", "control": "color", "default": "#ffffff" },
+        { "name": "shape", "control": "enum", "options": ["none", "circle", "daisy", "diamond", "metaballs"], "default": "metaballs" },
+        { "name": "repetition", "control": "range", "min": 1, "max": 10, "step": 0.1, "default": 4 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "shiftRed", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "shiftBlue", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": -0.3 },
+        { "name": "distortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.2 },
+        { "name": "contour", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "angle", "control": "range", "min": 0, "max": 360, "step": 1, "default": 0 }
+      ]
+    },
+    {
+      "id": "gem-smoke",
+      "component": "GemSmoke",
+      "category": "logo",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "fluorescentPreset", "firePreset", "infraredPreset"],
+      "blurb": "Smoky animated color fields behind a glassy logo or predefined shape.",
+      "params": [
+        { "name": "speed", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "image", "control": "boolean", "note": "optional image source" },
+        { "name": "colors", "control": "color", "note": "array up to 6" },
+        { "name": "colorBack", "control": "color", "default": "#000000" },
+        { "name": "colorInner", "control": "color", "default": "#000000" },
+        { "name": "shape", "control": "enum", "options": ["none", "circle", "daisy", "diamond", "metaballs"], "default": "metaballs" },
+        { "name": "innerDistortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "outerDistortion", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "outerGlow", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "innerGlow", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "offset", "control": "range", "min": -1, "max": 1, "step": 0.01, "default": 0 },
+        { "name": "angle", "control": "range", "min": 0, "max": 360, "step": 1, "default": 0 },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 }
+      ]
+    },
+    {
+      "id": "halftone-dots",
+      "component": "HalftoneDots",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "ledPreset", "netPreset", "roundAndSquarePreset"],
+      "blurb": "Halftone-dot image filter with grids, palettes and dot styles.",
+      "params": [
+        { "name": "image", "control": "boolean", "note": "image source" },
+        { "name": "colorFront", "control": "color", "default": "#000000" },
+        { "name": "colorBack", "control": "color", "default": "#ffffff" },
+        { "name": "type", "control": "enum", "options": ["classic", "gooey", "holes", "soft"], "default": "classic" },
+        { "name": "grid", "control": "enum", "options": ["square", "hex"], "default": "square" },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "radius", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "contrast", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.5 },
+        { "name": "originalColors", "control": "boolean", "default": false },
+        { "name": "inverted", "control": "boolean", "default": false }
+      ]
+    },
+    {
+      "id": "halftone-cmyk",
+      "component": "HalftoneCmyk",
+      "category": "image-filter",
+      "takesImage": true,
+      "hasMeta": false,
+      "hasPresets": true,
+      "presetNames": ["defaultPreset", "dropsPreset", "newspaper", "vintagePreset"],
+      "blurb": "CMYK halftone print effect with per-channel ink colors and dot styles.",
+      "params": [
+        { "name": "image", "control": "boolean", "note": "image source" },
+        { "name": "colorBack", "control": "color", "default": "#ffffff", "note": "paper color" },
+        { "name": "colorC", "control": "color", "default": "#00ffff" },
+        { "name": "colorM", "control": "color", "default": "#ff00ff" },
+        { "name": "colorY", "control": "color", "default": "#ffff00" },
+        { "name": "colorK", "control": "color", "default": "#000000" },
+        { "name": "type", "control": "enum", "options": ["dots", "ink", "sharp"], "default": "dots" },
+        { "name": "size", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "contrast", "control": "range", "min": 0, "max": 2, "step": 0.01, "default": 1 },
+        { "name": "softness", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0.3 },
+        { "name": "gridNoise", "control": "range", "min": 0, "max": 1, "step": 0.01, "default": 0 }
+      ]
+    }
+  ]
+}

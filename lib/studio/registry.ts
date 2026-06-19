@@ -53,6 +53,12 @@ export type ParamValues = Record<string, ParamValue>;
 
 const DEFAULT_PALETTE = ["#9ee7ff", "#5100ff", "#00ff80", "#ffcc00"];
 
+// The paper-shaders-react namespace is a flat map of shader components keyed by
+// export name; we treat it as such for the dynamic catalog lookup. Every shader
+// render site builds a `props: Record<string, unknown>` and spreads it, so a
+// `ComponentType<Record<string, unknown>>` is the honest, cast-free type for the
+// call sites. `as unknown as` (NOT `any`) is the one narrow assertion needed to
+// reshape the typed module namespace into that indexable map.
 const componentMap = ShadersReact as unknown as Record<
   string,
   ComponentType<Record<string, unknown>>

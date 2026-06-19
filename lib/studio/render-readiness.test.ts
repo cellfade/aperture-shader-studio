@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createContentSampler } from "@/lib/studio/render-readiness";
+import {
+  awaitRenderedFrame,
+  createContentSampler,
+  type PaperMount,
+} from "@/lib/studio/render-readiness";
 
 /**
  * jsdom has no real 2D canvas backend, so `createContentSampler` would get a
@@ -111,5 +115,63 @@ describe("createContentSampler.hasContent", () => {
     const s = createContentSampler();
     expect(s.hasContent(fakeSrc, 0)).toBe(true);
     expect(s.hasChanged(fakeSrc, 0)).toBe(true);
+  });
+});
+
+describe("awaitRenderedFrame", () => {
+  /** A fake mount whose GL canvas is sized so the mount-wait passes immediately. */
+  function makeMount(): PaperMount {
+    const canvas = document.createElement("canvas");
+    canvas.width = 8;
+    canvas.height = 8;
+    return { canvasElement: canvas, setSpeed: () => {}, setFrame: () => {} };
+  }
+
+  it("resolves the GL canvas once the gate passes and marks it presented", async () => {
+    const mount = makeMount();
+    const sampler = createContentSampler();
+    current = buffer({ alpha: 255, varied: true, seed: 100 });
+    const markSpy = vi.spyOn(sampler, "markPresented");
+
+    const ready = await awaitRenderedFrame({
+      getMount: () => mount,
+      sampler,
+      mode: "change",
+      minSettleMs: 0,
+      maxWaitMs: 2000,
+    });
+
+    expect(ready).toBe(mount.canvasElement);
+    expect(markSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolves null when cancelled before the frame is ready", async () => {
+    const mount = makeMount();
+    const sampler = createContentSampler();
+    current = buffer({ alpha: 255, varied: true, seed: 100 });
+
+    const ready = await awaitRenderedFrame({
+      getMount: () => mount,
+      sampler,
+      mode: "presence",
+      minSettleMs: 0,
+      maxWaitMs: 2000,
+      isCancelled: () => true,
+    });
+
+    expect(ready).toBeNull();
+  });
+
+  it("resolves null when no mount appears before the timeout", async () => {
+    const sampler = createContentSampler();
+    const ready = await awaitRenderedFrame({
+      getMount: () => undefined,
+      sampler,
+      mode: "presence",
+      minSettleMs: 0,
+      // Negative budget => the very first tick is already past the deadline.
+      maxWaitMs: -1,
+    });
+    expect(ready).toBeNull();
   });
 });

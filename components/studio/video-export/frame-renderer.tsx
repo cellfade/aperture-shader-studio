@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   forwardRef,
   useEffect,
@@ -13,6 +12,7 @@ import {
   type ParamValues,
 } from "@/lib/studio/registry";
 import {
+  awaitRenderedFrame,
   createContentSampler,
   getPaperMount,
   type PaperMount,
@@ -207,27 +207,22 @@ function FrameRendererImpl(
           // this upload silently failed. Wait until the composited canvas is
           // non-blank AND its signature differs from the last presented frame
           // (first frame degrades to presence; identical-frame fallback past the
-          // grace window is preserved inside hasChanged).
-          await new Promise<void>((resolve, reject) => {
-            const gateStart = performance.now();
-            const tick = () => {
-              const elapsed = performance.now() - gateStart;
-              if (
-                elapsed >= MIN_SETTLE_MS &&
-                sampler.hasChanged(canvas, elapsed)
-              ) {
-                sampler.markPresented();
-                resolve();
-                return;
-              }
-              if (elapsed >= MAX_WAIT_MS) {
-                reject(new Error("frame never produced changed content"));
-                return;
-              }
-              requestAnimationFrame(tick);
-            };
-            requestAnimationFrame(tick);
+          // grace window is preserved inside hasChanged). The mount is already
+          // resolved + sized here, so the shared loop's mount-wait passes on its
+          // first tick and we proceed straight to the gate — same timing as the
+          // previous inline `gateStart`-clocked loop. `markPresented()` runs
+          // inside the helper on accept.
+          const ready = await awaitRenderedFrame({
+            getMount: () => getPaperMount(elRef.current),
+            sampler,
+            mode: "change",
+            minSettleMs: MIN_SETTLE_MS,
+            maxWaitMs: MAX_WAIT_MS,
+            isCancelled: () => false,
           });
+          if (!ready) {
+            throw new Error("frame never produced changed content");
+          }
         } finally {
           URL.revokeObjectURL(blobUrlImg.url);
         }
@@ -242,10 +237,18 @@ function FrameRendererImpl(
         return out;
       },
     }),
+    // VERDICT (#29): the handle captures ONLY `width`/`height` from render scope
+    // (used by sourceToImageWithUrl + the output canvas). Everything else it
+    // touches is a ref (scratchRef, samplerRef) or live DOM read each call
+    // (getPaperMount(elRef.current)) — never a stale render value. `shader` and
+    // `values` intentionally flow through the mounted <Comp> JSX below, NOT
+    // through this handle: changing them re-renders the shader element, and the
+    // handle reads the resulting GL canvas live via getPaperMount. So
+    // [width, height] is the complete and correct dependency set.
     [width, height],
   );
 
-  const Comp = getComponent(shader.component) as any;
+  const Comp = getComponent(shader.component);
   if (!Comp) return null;
 
   const props: Record<string, unknown> = {
@@ -271,6 +274,9 @@ function FrameRendererImpl(
         opacity: 0,
       }}
     >
+      {/* `Comp` is a stable module-level registry lookup (getComponent), not a
+          component created during render, so it is referentially stable. */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Comp ref={elRef} {...props} />
     </div>
   );

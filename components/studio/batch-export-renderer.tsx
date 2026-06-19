@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef, useState } from "react";
 import {
   getComponent,
@@ -8,6 +7,7 @@ import {
   type ParamValues,
 } from "@/lib/studio/registry";
 import {
+  awaitRenderedFrame,
   createContentSampler,
   getPaperMount,
   preloadImage,
@@ -85,40 +85,8 @@ export function BatchExportRenderer({
       setIndex((i) => i + 1);
     };
 
-    const tick = () => {
-      if (cancelled || doneRef.current) return;
-      const el = ref.current;
-      const mount = getPaperMount(el);
-      const canvas = mount?.canvasElement;
-      const sized = !!canvas && canvas.width > 0 && canvas.height > 0;
-      const elapsed = performance.now() - start;
-
-      if (!mount || !sized) {
-        if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
-        else fail();
-        return;
-      }
-
-      try {
-        mount.setSpeed(0);
-        mount.setFrame(0);
-      } catch {
-        /* noop */
-      }
-
-      // Each frame re-keys the shader element (fresh blank GL buffer) AND uses a
-      // fresh per-index sampler, so there is never a stale prior frame in this
-      // buffer — hasChanged sees no prior presented signature and degrades to a
-      // presence check, identical to the old hasContent gate. Kept on the
-      // consolidated API so the readback gate lives in one place.
-      if (elapsed < MIN_SETTLE || !sampler.hasChanged(canvas!, elapsed)) {
-        if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
-        else fail();
-        return;
-      }
-      sampler.markPresented();
-
-      if (reading) return;
+    const readback = (canvas: HTMLCanvasElement) => {
+      if (cancelled || doneRef.current || reading) return;
       reading = true;
       requestAnimationFrame(() => {
         if (cancelled || doneRef.current) return;
@@ -128,7 +96,7 @@ export function BatchExportRenderer({
           out.height = frame.height;
           const ctx = out.getContext("2d");
           if (!ctx) return fail();
-          ctx.drawImage(canvas!, 0, 0, frame.width, frame.height);
+          ctx.drawImage(canvas, 0, 0, frame.width, frame.height);
           out.toBlob((blob) => {
             if (blob) advance(blob);
             else fail();
@@ -140,19 +108,41 @@ export function BatchExportRenderer({
     };
 
     const begin = () => {
-      if (!cancelled && !doneRef.current) requestAnimationFrame(tick);
+      if (cancelled || doneRef.current) return;
+      // Each frame re-keys the shader element (fresh blank GL buffer) AND uses a
+      // fresh per-index sampler, so there is never a stale prior frame in this
+      // buffer — the change gate sees no prior presented signature and degrades
+      // to a presence check, identical to the old hasContent gate. Kept on the
+      // consolidated gate so the readback loop lives in one place.
+      awaitRenderedFrame({
+        getMount: () => getPaperMount(ref.current),
+        sampler,
+        mode: "change",
+        minSettleMs: MIN_SETTLE,
+        maxWaitMs: MAX_WAIT,
+        start,
+        isCancelled: () => cancelled || doneRef.current,
+      }).then((canvas) => {
+        if (canvas) readback(canvas);
+        else fail();
+      });
     };
     preloadImage(frame.imageUrl, begin);
 
     return () => {
       cancelled = true;
     };
+    // The render loop runs once per `index`; every other captured value
+    // (shader, values, frames, onProgress, onDone) is fixed for this
+    // BatchExportRenderer's keyed lifetime — studio.tsx snapshots `batchReq` at
+    // click time and mounts a fresh renderer per export, so an `index`-only dep
+    // never reads a stale prop. The disable documents that intentional contract.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   if (!frame) return null;
 
-  const Comp = getComponent(shader.component) as any;
+  const Comp = getComponent(shader.component);
   if (!Comp) return null;
 
   const props: Record<string, unknown> = {
@@ -183,6 +173,9 @@ export function BatchExportRenderer({
       }}
     >
       {/* Re-key per frame so paper-shaders re-mounts at the new size / source. */}
+      {/* `Comp` is a stable module-level registry lookup (getComponent), not a
+          component created during render, so it is referentially stable. */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Comp key={index} ref={ref} {...props} />
     </div>
   );

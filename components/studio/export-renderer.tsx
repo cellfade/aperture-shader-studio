@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useRef } from "react";
 import {
   getComponent,
@@ -9,6 +8,7 @@ import {
 } from "@/lib/studio/registry";
 import { downloadBlob } from "@/lib/studio/download";
 import {
+  awaitRenderedFrame,
   createContentSampler,
   getPaperMount,
   preloadImage,
@@ -40,6 +40,12 @@ export function ExportRenderer({
 }: ExportRendererProps) {
   const ref = useRef<HTMLElement>(null);
 
+  // One-shot mount contract: a fresh ExportRenderer is mounted per export (it is
+  // conditionally rendered from `exportReq`, which studio.tsx snapshots at click
+  // time), then unmounted when the export resolves. Every prop (onDone, imageUrl,
+  // shader, values, width, height, filename) is therefore FIXED for this
+  // instance's lifetime — the effect runs exactly once and never reads a stale
+  // value. Hence the intentionally-empty dep array below.
   useEffect(() => {
     let settled = false;
     let reading = false;
@@ -55,39 +61,8 @@ export function ExportRenderer({
       onDone(ok);
     };
 
-    const tick = () => {
-      if (settled) return;
-      const el = ref.current;
-      const mount = getPaperMount(el);
-      const canvas = mount?.canvasElement;
-      const sized = !!canvas && canvas.width > 0 && canvas.height > 0;
-      const elapsed = performance.now() - start;
-
-      if (!mount || !sized) {
-        if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
-        else finish(false);
-        return;
-      }
-
-      try {
-        mount.setSpeed(0);
-        mount.setFrame(0);
-      } catch {
-        /* noop */
-      }
-
-      // Single-frame export: a fresh off-screen mount + fresh sampler, so there
-      // is no prior presented signature — hasChanged degrades to a presence
-      // check on this first frame (identical to the old hasContent gate). Using
-      // the consolidated change-detecting gate keeps all three cores in step.
-      if (elapsed < MIN_SETTLE || !sampler.hasChanged(canvas!, elapsed)) {
-        if (elapsed < MAX_WAIT) requestAnimationFrame(tick);
-        else finish(false);
-        return;
-      }
-      sampler.markPresented();
-
-      if (reading) return;
+    const readback = (canvas: HTMLCanvasElement) => {
+      if (settled || reading) return;
       reading = true;
       requestAnimationFrame(() => {
         if (settled) return;
@@ -97,7 +72,7 @@ export function ExportRenderer({
           out.height = height;
           const ctx = out.getContext("2d");
           if (!ctx) return finish(false);
-          ctx.drawImage(canvas!, 0, 0, width, height);
+          ctx.drawImage(canvas, 0, 0, width, height);
           out.toBlob((blob) => {
             if (blob) {
               downloadBlob(blob, filename);
@@ -114,7 +89,23 @@ export function ExportRenderer({
 
     // Preload/decode the source so the texture upload is ready before we read.
     const begin = () => {
-      if (!settled) requestAnimationFrame(tick);
+      if (settled) return;
+      // Single-frame export: a fresh off-screen mount + fresh sampler, so there
+      // is no prior presented signature — the change gate degrades to a presence
+      // check on this first frame (identical to the old hasContent gate). Using
+      // the consolidated gate keeps all three cores on one code path.
+      awaitRenderedFrame({
+        getMount: () => getPaperMount(ref.current),
+        sampler,
+        mode: "change",
+        minSettleMs: MIN_SETTLE,
+        maxWaitMs: MAX_WAIT,
+        start,
+        isCancelled: () => settled,
+      }).then((canvas) => {
+        if (canvas) readback(canvas);
+        else finish(false);
+      });
     };
     if (imageUrl) preloadImage(imageUrl, begin);
     else begin();
@@ -125,7 +116,7 @@ export function ExportRenderer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const Comp = getComponent(shader.component) as any;
+  const Comp = getComponent(shader.component);
   if (!Comp) return null;
 
   const props: Record<string, unknown> = {
@@ -151,6 +142,9 @@ export function ExportRenderer({
         opacity: 0,
       }}
     >
+      {/* `Comp` is a stable module-level registry lookup (getComponent), not a
+          component created during render, so it is referentially stable. */}
+      {/* eslint-disable-next-line react-hooks/static-components */}
       <Comp ref={ref} {...props} />
     </div>
   );

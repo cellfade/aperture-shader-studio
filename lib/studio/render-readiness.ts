@@ -120,6 +120,120 @@ export function createContentSampler(): ContentSampler {
   };
 }
 
+/**
+ * Gate mode for {@link awaitRenderedFrame}:
+ * - `"presence"` — accept the first non-blank frame (uses `hasContent`). Correct
+ *   for the off-screen PNG cores (export + batch) which mount a fresh blank GL
+ *   buffer for each frame, so there is never a stale prior frame to confuse.
+ * - `"change"` — accept only once the composited frame differs from the last
+ *   *presented* one (uses `hasChanged` + `markPresented`). Correct for the MP4
+ *   render core, whose GL buffer PERSISTS across frames.
+ *
+ * NOTE: the two PNG cores currently call the `"change"` gate too — on a fresh
+ * blank buffer with a fresh sampler `hasChanged` degrades to a presence check on
+ * the first (only) frame, identical to `hasContent`. Keeping them on the same
+ * code path is the whole point of this consolidation; pass `"presence"` only if
+ * you genuinely want the pure presence gate.
+ */
+export type ReadinessMode = "presence" | "change";
+
+export interface AwaitRenderedFrameOptions {
+  /**
+   * Resolves the live paper-shaders GL mount. Called EVERY tick (not captured
+   * once) so the loop picks the mount up as soon as paper-shaders attaches it to
+   * the element — matching the original per-core `getPaperMount(ref.current)`
+   * inside the rAF tick.
+   */
+  getMount: () => PaperMount | undefined;
+  /** Sampler driving the readiness gate (presence or change). */
+  sampler: ContentSampler;
+  /** Which gate to apply (see {@link ReadinessMode}). */
+  mode: ReadinessMode;
+  /** Don't accept a frame before this many ms have elapsed since `start`. */
+  minSettleMs: number;
+  /** Give up (resolve `null`) after this many ms since `start`. */
+  maxWaitMs: number;
+  /**
+   * Clock origin in `performance.now()` terms. The gate's `elapsed` (which feeds
+   * the sampler's grace window) and the timeout are both measured from here.
+   * Defaults to "now" at call time.
+   */
+  start?: number;
+  /** Aborts the loop early; resolves `null` when it returns true. */
+  isCancelled?: () => boolean;
+}
+
+/**
+ * Shared readback-gate loop for the three off-screen render cores. Runs a
+ * requestAnimationFrame tick loop that:
+ *   1. waits for a sized GL canvas on the mount,
+ *   2. freezes animation (`setSpeed(0)` / `setFrame(0)`) every tick once present,
+ *   3. resolves the ready GL canvas once the readiness gate (presence/change)
+ *      passes — calling `markPresented()` on accept,
+ *   4. resolves `null` on timeout / cancel / missing-mount.
+ *
+ * Timing is intentionally identical to the previous per-core inline loops: same
+ * grace window (inside the sampler), same `minSettleMs`/`maxWaitMs` gating,
+ * same "sampling unavailable → don't block" behavior (handled inside the
+ * sampler), same per-tick `setSpeed(0)/setFrame(0)`. The caller owns what
+ * happens AFTER the frame is ready (the readback/encode + any teardown).
+ */
+export function awaitRenderedFrame(
+  options: AwaitRenderedFrameOptions,
+): Promise<HTMLCanvasElement | null> {
+  const {
+    getMount,
+    sampler,
+    mode,
+    minSettleMs,
+    maxWaitMs,
+    start = performance.now(),
+    isCancelled,
+  } = options;
+
+  return new Promise<HTMLCanvasElement | null>((resolve) => {
+    const tick = () => {
+      if (isCancelled?.()) {
+        resolve(null);
+        return;
+      }
+      const mount = getMount();
+      const canvas = mount?.canvasElement;
+      const sized = !!canvas && canvas.width > 0 && canvas.height > 0;
+      const elapsed = performance.now() - start;
+
+      if (!mount || !sized) {
+        if (elapsed < maxWaitMs) requestAnimationFrame(tick);
+        else resolve(null);
+        return;
+      }
+
+      try {
+        mount.setSpeed(0);
+        mount.setFrame(0);
+      } catch {
+        /* noop */
+      }
+
+      const gatePassed =
+        mode === "change"
+          ? sampler.hasChanged(canvas, elapsed)
+          : sampler.hasContent(canvas, elapsed);
+
+      if (elapsed < minSettleMs || !gatePassed) {
+        if (elapsed < maxWaitMs) requestAnimationFrame(tick);
+        else resolve(null);
+        return;
+      }
+
+      sampler.markPresented();
+      resolve(canvas);
+    };
+
+    requestAnimationFrame(tick);
+  });
+}
+
 /** Decode-preload an image URL so the texture upload is ready before we read back. */
 export function preloadImage(url: string, then: () => void): void {
   const pre = new Image();

@@ -1,10 +1,9 @@
 # Aperture — Motion, UX Polish & Quality Hardening — Product Requirements Document
 
-> Status: **Draft** (scaffold written 2026-06-23; concrete enhancement inventory in §5 is
-> populated from two read-only audits — a design/UX/motion audit and a code-quality/a11y/perf
-> sweep — then this PRD is finalized and executed in gated agentic phases).
+> Status: **Final** (2026-06-23). §5/§6 synthesized from two read-only audits (a design/UX/motion
+> audit and a code-quality/a11y/perf sweep); executing in gated agentic phases I→M.
 > Decisions locked with product owner: **Framer Motion** (`motion`) as the motion library;
-> motion philosophy **subtle & precise**.
+> motion philosophy **subtle & precise**. Hero moment: **A1** (shader-switch crossfade + wipe).
 
 ## 1. Overview
 
@@ -105,17 +104,80 @@ CSS custom properties in `app/globals.css` for any CSS-driven motion). Indicativ
 - Never animate layout in a way that causes CLS or shifts focus targets under the pointer.
 - 60fps or don't ship it; never compete with the WebGL canvas for the main thread.
 
-## 5. Enhancement Inventory (populated from audits — leverage-ordered)
+## 5. Enhancement Inventory (synthesized from both audits — leverage-ordered)
 
-> Filled from the design/UX/motion audit and the code-quality/a11y/perf sweep. Each item:
-> surface · what · why · effort (S/M/L) · risk · reduced-motion handling · phase.
+> Verdict from the design audit: this is already a disciplined, on-brand build (monochrome
+> identity consistent, reduced-motion genuinely wired, focus rings + `tabular-nums` present,
+> memoization thoughtful). The work is **promotion, not rescue** — one hero moment + precise
+> polish. The QA sweep verified gates green / `any`-free / pipelines healthy and surfaced one
+> real bug (boolean toggle) — **already fixed & shipped** (commit `f27a5d5`, +2 tests).
 
-_TBD — synthesized when both audits return; the single "hero moment" is named here._
+**THE HERO MOMENT → `A1`: shader-switch preview crossfade + a single one-pass "exposure
+wipe."** The preview *is* the product; this is the only orchestrated beat the subtle-precise
+direction spends its boldness on. Everything else stays a whisper.
 
-## 6. Functional / UX Requirements
+Legend: phase · effort (S/M/L) · risk · RM = needs reduced-motion path · lib = needs Framer
+Motion (else CSS-only).
 
-> Detailed acceptance criteria per accepted enhancement are written here once §5 is populated.
-> Every motion requirement includes its reduced-motion behavior as explicit acceptance criteria.
+| ID | Surface — what | Why it elevates | Phase | Eff | Risk | RM | lib |
+|----|----------------|-----------------|-------|-----|------|----|----|
+| **A1** | Preview: `AnimatePresence` crossfade (fade+scale .985→1, ~220/160ms) on `shader.id` + one hairline white "exposure" wipe | **Hero.** Tool feels like an instrument re-exposing a plate, not a page re-rendering | L | M | **M** (D1) | yes | yes |
+| **B1** | Touch targets <44px: mode toggle (23px), footer btns (17px), type segmented (27px), chips (36px) → 44px hit area on coarse pointers | Accessibility-first; pure win, no aesthetic cost | J | S | low | – | no |
+| **A7** | Export button: indeterminate 1px hairline shimmer while `working`; single checkmark draw-on (`pathLength`) + "Downloaded ✓" dwell on done | The payoff currently reads as "nothing happened" | L | M | **M** (D2) | yes | yes (check) |
+| **B2** | Video-mode-before-video: suppress/relabel stale photo-frame actions (Download PNG / Recapture shown with no video; stale "sample.jpg" status) | Removes a genuinely confusing state | M | S–M | low | – | no |
+| **A3** | Compare handle: `scale(.94)` + glow on `pointerdown`, spring back (`bounce:0`, 120ms) | Signature interaction should feel physical | J | S | low | yes* | no |
+| **B4** | Gate the compare auto-sweep to the FIRST photo of a session only (not every load/replace) | Stops a hero animation becoming a repetitive tic | J | S | low | done | no |
+| **A4+C2** | Switch thumb: replace `transition:all` with `transition-[left,background-color]` 160ms; crisp slide | Fixes flagged anti-pattern; polishes most-touched control | J | S | low | * | no |
+| **C1+C6** | Concentric-radius audit (inner = outer − padding at `p-5`) + normalize off-grid spacing (3.5/2.5 → 4/8/12/16) | Cheapest "feels more expensive"; minimal design lives on this | J | S | none | – | no |
+| **A2** | Mode photo↔video: cross-dissolve stage contents + `layout` height/aspect settle (~240ms) | Modes read as peers ("same stage, different source") | K | M | M | yes | yes |
+| **A5** | Control-panel sections (Presets/Adjust/Color) fade+rise w/ ~60–80ms stagger on `shader.id` change (reuse `@keyframes rise`) | Turns a content-dump into "new instrument loaded" | K | S–M | low | yes | opt |
+| **A6** | Notice/status: subtle fade+slide-in (4px, 180ms) + soft fade-out via `AnimatePresence` (stays inline, not a floating toast) | Status changes are currently easy to miss | K | S | low | yes | yes |
+| **A8** | Drag-drop: fade dashed overlay in (120ms) + drop settle 1.0→.98→1.0 (chrome only, never canvas) | Polishes the ingest affordance | J | S | low | yes* | no |
+| **A9** | Masthead: one-time `opacity 0→.6` develop-in on first paint (400ms); otherwise leave the running MeshGradient alone | Page "develops" — a darkroom nod that costs nothing | K | S | low | yes | opt |
+| **C3** | Compare "before" `<img>`: add 1px `outline-white/10` so before/after read as one plane | Depth consistency (make-it-feel-better #11) | J | S | none | – | no |
+| **C4+C5** | One intermediate display step for active-shader name (15→17px); `text-wrap:pretty` on hero `<p>` + shader blurb | Tightens mid-tier hierarchy; kills orphans | J | S | low | – | no |
+| **B5** | Color inputs: make the hex string an editable, validated text field (not static) | Power-user expectation | M | M | low | – | no |
+| **B3** | Mode radiogroup arrow keys can silently discard preview context; prevent incidental focus / consider undo | Prevents accidental destructive switch | M | S | low | – | no |
+| **B6** | Slider double-click/Backspace-resets-to-default is undiscoverable → add a hint/affordance | Discoverability | M | S | none | – | no |
+| **B7** | Sequence "Frames" number field (14px, touch-hostile) → +/− steppers or wider | Mobile usability | M | S | low | – | no |
+| **B8** | Microcopy: "Download PNG"→"Downloaded ✓" (verb consistency); "Or try a sample"→parallel phrasing | Copy as design material | J | S | none | – | no |
+| **C7** | Verify (no change): `--muted-foreground` 8.1:1 holds; watch 10px mono labels over `backdrop-blur` at runtime (axe) | Guard against token drift | M | 0 | – | – | no |
+
+\* covered by the existing global reduced-motion CSS backstop for CSS-only transitions; JS-driven
+(`AnimatePresence`) items must additionally consume `useReducedMotion()` and hard-cut (D5).
+
+**Do-not-touch (from the QA sweep's regression list):** the off-screen render cores + export
+pipeline timing (`minSettle/maxWait/grace` constants), the readback content-change gate
+(`hasChanged`/`markPresented`), `VideoFrame.close()` discipline, the URL-state one-shot post-mount
+hydration (#418 guard), and the focusable `aria-disabled` export-button pattern. **Never animate
+over the live WebGL canvas or the export render path** (D1/D2).
+
+## 6. Functional / UX Requirements (acceptance criteria)
+
+Every motion item's acceptance includes its reduced-motion behavior. Representative criteria
+(full set tracked per phase; all share the §7 gate):
+
+- **FR-A1 (hero).** Given a loaded photo, when the user switches shaders, the outgoing preview
+  fades/scales out while the incoming fades/scales in over ~220ms (exit softer at ~160ms), with
+  a single left→right 1px white wipe; at most one transition in flight; **both WebGL canvases
+  coexist only for the overlap (~220ms), never longer**; live-preview FPS is unaffected after
+  settle. **Reduced motion:** hard cut, no overlap, no wipe. Verified live (FPS + PNG/MP4 smoke).
+- **FR-B1.** All interactive controls expose a ≥44px hit area on coarse pointers (visual size may
+  stay); verified by measuring `getBoundingClientRect` at 390px on the mode toggle, footer
+  buttons, segmented controls, and chips.
+- **FR-A7.** While exporting, a 1px monochrome hairline shimmer indicates indeterminate progress
+  on the **visible button only** (never the off-screen renderer); on success a single checkmark
+  draws on then dwells ~1.6s as "Downloaded ✓". **Reduced motion:** static "Rendering…" + no
+  draw-on. Export timing/readback/frame-buffer behavior is byte-identical (live smoke).
+- **FR-B2.** In video mode before a video is loaded, photo-frame actions are suppressed or
+  clearly relabeled and the status communicates what "Download" applies to.
+- **FR-B4.** The orchestrated compare sweep runs only on the first photo of a session; later
+  loads settle at rest.
+- **FR-(A3/A4/A8/C1/C3/C4/C5/C6/B8).** CSS-only polish; the global reduced-motion backstop covers
+  transition neutralization; no new chroma; concentric radii and on-grid spacing verified.
+- **Cross-cutting reduced-motion (FR-RM).** With `prefers-reduced-motion: reduce`, no
+  translate/scale/large-movement animation plays anywhere; state changes are instant or
+  opacity-only; the axe pass and a reduced-motion manual check are part of Phase M.
 
 ## 7. Non-Functional Requirements
 - **Performance**: live preview frame rate ≥ baseline; export timing within noise of baseline
@@ -146,22 +208,29 @@ Same methodology as phases A–H: each phase is dispatched to an agent, must pas
 (eslint/tsc/test/build) + a live PNG+MP4 export smoke + a screenshot design check, then is
 committed → auto-deployed to `main` (cellfade/Vercel). Phases are sequenced to minimize churn:
 
-- **Phase I — Motion foundation & QA baseline.** Install Framer Motion (LazyMotion/MotionConfig),
-  author `lib/studio/motion.ts` tokens+variants, wire reduced-motion, add an axe-core pass to the
-  e2e setup. Land any HIGH-confidence quick fixes the QA sweep surfaces. Establish the perf/JS
-  baseline numbers. No visible motion yet beyond proving the plumbing on one low-risk surface.
-- **Phase J — Core micro-interactions.** Apply the system to the highest-leverage component
-  surfaces (controls, mode toggle, shader switch, preset apply already tweens — align it to the
-  system, notices/toasts, drag-drop affordance). Subtle, fast, reduced-motion-correct.
-- **Phase K — The hero moment + reveals.** Implement the single orchestrated moment + tasteful
-  entrance/transition reveals (masthead, panel/section, photo-loaded). Restraint enforced.
-- **Phase L — UX & visual-design polish.** State treatments (loading/empty/error/success),
-  microcopy, spacing/rhythm/hierarchy refinements, touch targets/responsive nits from §5.
-- **Phase M — Comprehensive QA & verification.** Full axe pass (0 serious/critical), perf
-  re-measure vs baseline, expanded automated tests, cross-viewport screenshot review, final
-  regression smoke of all export paths. Update `AGENTS.md`/docs.
+- **Phase I — Motion foundation & QA baseline.** Install `motion` (pinned), author
+  `lib/studio/motion.ts` (tokens + reusable variants), wrap the studio subtree in
+  `MotionConfig reducedMotion="user"` + `LazyMotion`/`m`, add an `@axe-core/playwright` pass to
+  the e2e setup, and record the perf/JS baseline (initial-route JS, a preview FPS reference).
+  Prove the plumbing on ONE low-risk surface (A6 notice or A9 masthead develop-in). (Boolean-bug
+  QA fix already shipped pre-I.)
+- **Phase J — CSS-only polish & a11y (no library risk).** B1 touch targets, A3 compare-grab,
+  A4+C2 switch thumb (kill `transition:all`), A8 drag-drop affordance, B4 first-load sweep gate,
+  C1+C6 concentric radius + spacing, C3 photo outline, C4+C5 type/orphans, B6 reset hint, B8
+  microcopy. Highest-leverage, lowest-risk; no new dependency in play.
+- **Phase K — Framer Motion micro-interactions.** A2 mode crossfade + `layout` settle, A5
+  staggered control-group reveal, A6 notice entrance (if not in I), A9 masthead develop-in (if
+  not in I). Subtle, reduced-motion hard-cut, ≤ JS budget.
+- **Phase L — The hero moment + export beat (perf-sensitive).** A1 shader-switch crossfade +
+  exposure wipe and A7 export progress shimmer + completion check. Built carefully against D1/D2:
+  one transition in flight, canvases coexist only for the overlap, shimmer on visible DOM only.
+  Verified with an FPS check + full PNG/MP4 export smoke.
+- **Phase M — UX state clarity + comprehensive QA.** B2 video-mode state, B3 arrow-key guard,
+  B5 editable hex, B7 frames stepper, C7 verify; then full axe pass (0 serious/critical), perf
+  re-measure vs the Phase-I baseline, expanded automated tests, cross-viewport screenshot review,
+  full export regression smoke, and docs (`AGENTS.md`) update.
 
-(Phases may merge/split once §5 is finalized; the gate and live-verify discipline is fixed.)
+(The gate + live-verify discipline is fixed; CSS-only work is front-loaded to de-risk the library.)
 
 ## 10. Success Metrics
 | Metric | Baseline (pre-I) | Target | How measured |

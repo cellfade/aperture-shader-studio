@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ControlPanel } from "@/components/studio/control-panel";
 import { SHADERS_BY_ID, initialValues } from "@/lib/studio/registry";
+
+// A5 — drive the reduced-motion branch of the staggered control-group reveal.
+const reducedMotion = vi.hoisted(() => ({ value: false }));
+vi.mock("@/lib/studio/use-media-query", () => ({
+  useReducedMotion: () => reducedMotion.value,
+  useMediaQuery: () => false,
+}));
+
+afterEach(() => {
+  reducedMotion.value = false;
+  cleanup();
+});
 
 // image-dithering carries boolean params (originalColors / inverted) plus
 // range/enum/color params — a good fixture for the panel's control wiring.
@@ -66,5 +78,47 @@ describe("ControlPanel — control wiring", () => {
     expect(name).toBe(rangeParam.name);
     expect(typeof value).toBe("number");
     expect(value).toBeCloseTo(next, 5);
+  });
+});
+
+describe("ControlPanel — A5 staggered reveal (reduced-motion safe)", () => {
+  it("renders all sections with motion allowed", () => {
+    reducedMotion.value = false;
+    render(
+      <ControlPanel
+        shader={shader}
+        values={initialValues(shader)}
+        onSelectShader={() => {}}
+        onChange={() => {}}
+        onReplaceValues={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Adjust" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Color" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the same sections under reduced motion (no crash, opacity-only path)", () => {
+    reducedMotion.value = true;
+    render(
+      <ControlPanel
+        shader={shader}
+        values={initialValues(shader)}
+        onSelectShader={() => {}}
+        onChange={() => {}}
+        onReplaceValues={() => {}}
+      />,
+    );
+    // Both motion branches must yield the same content (the reveal is purely
+    // presentational; reduced motion just collapses the stagger).
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Adjust" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Color" }),
+    ).toBeInTheDocument();
   });
 });

@@ -14,7 +14,12 @@ export function AmbientGradient() {
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
+      // A9 — one-shot CSS "develop-in" fade (opacity 0 → the resting `opacity-60`)
+      // on first paint (~400ms). CSS-only because the masthead is outside the
+      // Studio MotionProvider subtree; only the container opacity animates (no
+      // second loop on the running shader). Reduced motion shows it at rest
+      // immediately (the keyframe is neutralised in globals.css).
+      className="animate-develop-in pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
       style={{
         maskImage: "linear-gradient(to bottom, black, transparent 85%)",
         WebkitMaskImage: "linear-gradient(to bottom, black, transparent 85%)",

@@ -253,8 +253,33 @@
   animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* A9 — masthead "develop-in": a one-shot opacity 0 → target fade on first
+   paint, like a plate developing in a darkroom. The masthead MeshGradient lives
+   OUTSIDE the Studio MotionProvider subtree, so this is CSS-only (no Framer) —
+   no second animated property is added to the already-running shader; only the
+   container's opacity is animated, exactly once. The element's resting opacity
+   is set via Tailwind (`opacity-60`); this keyframe ramps opacity from 0 up to
+   that resting value, so `both` fill is safe (it ends at the at-rest state).
+   Reduced motion: the keyframe is neutralised below — the masthead simply shows
+   at its resting opacity immediately (no develop-in). */
+@keyframes develop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.animate-develop-in {
+  animation: develop-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-rise {
+    animation: none;
+  }
+
+  /* A9 — under reduced motion the masthead shows at its resting opacity
+     immediately, with no develop-in fade. */
+  .animate-develop-in {
     animation: none;
   }
 

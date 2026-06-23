@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { m } from "motion/react";
 import { ShaderPicker } from "@/components/studio/shader-picker";
 import { ParamControl } from "@/components/studio/param-control";
 import { PresetRow } from "@/components/studio/preset-row";
@@ -8,6 +9,8 @@ import {
   buildShareUrl,
   copyShareLink,
 } from "@/components/studio/use-url-state";
+import { fadeRiseVariants, staggerGroupVariants } from "@/lib/studio/motion";
+import { useReducedMotion } from "@/lib/studio/use-media-query";
 import {
   initialValues,
   type Shader,
@@ -42,6 +45,8 @@ export function ControlPanel({
   const toggleParams = shader.params.filter((p) => p.control === "boolean");
 
   const [copied, setCopied] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const sectionVariants = fadeRiseVariants(reducedMotion);
   const reset = () => onReplaceValues(initialValues(shader));
 
   const share = async () => {
@@ -80,37 +85,41 @@ export function ControlPanel({
         <ShaderPicker activeId={shader.id} onSelect={onSelectShader} />
       </div>
 
+      {/* A5 — the scroll container is stable (not keyed), so the panel scroll
+         position is preserved across shader switches. Only the inner reveal
+         group is keyed on `shader.id`, so the fade+rise stagger replays on a
+         shader *identity* change but NOT on a param tweak (params don't change
+         the key). */}
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div className="mb-4">
-          <h2 className="font-display text-[17px] font-medium capitalize tracking-tight text-foreground">
-            {shader.id.replace(/-/g, " ")}
-          </h2>
-          {shader.blurb && (
-            <p className="mt-1 text-[12px] leading-relaxed text-pretty text-muted-foreground">
-              {shader.blurb}
-            </p>
-          )}
-        </div>
+        <m.div
+          key={shader.id}
+          variants={staggerGroupVariants(reducedMotion)}
+          initial="hidden"
+          animate="visible"
+        >
+          <m.div variants={sectionVariants} className="mb-4">
+            <h2 className="font-display text-[17px] font-medium capitalize tracking-tight text-foreground">
+              {shader.id.replace(/-/g, " ")}
+            </h2>
+            {shader.blurb && (
+              <p className="mt-1 text-[12px] leading-relaxed text-pretty text-muted-foreground">
+                {shader.blurb}
+              </p>
+            )}
+          </m.div>
 
-        <PresetRow
-          shader={shader}
-          values={values}
-          onReplaceValues={onReplaceValues}
-        />
+          <m.div variants={sectionVariants}>
+            <PresetRow
+              shader={shader}
+              values={values}
+              onReplaceValues={onReplaceValues}
+            />
+          </m.div>
 
-        {(valueParams.length > 0 || toggleParams.length > 0) && (
-          <Section title="Adjust">
-            {valueParams.map((p) => (
-              <ParamControl
-                key={p.name}
-                param={p}
-                value={values[p.name]}
-                onChange={onChange}
-              />
-            ))}
-            {toggleParams.length > 0 && (
-              <div className="space-y-1 border-t border-border/60 pt-3">
-                {toggleParams.map((p) => (
+          {(valueParams.length > 0 || toggleParams.length > 0) && (
+            <m.div variants={sectionVariants}>
+              <Section title="Adjust">
+                {valueParams.map((p) => (
                   <ParamControl
                     key={p.name}
                     param={p}
@@ -118,23 +127,37 @@ export function ControlPanel({
                     onChange={onChange}
                   />
                 ))}
-              </div>
-            )}
-          </Section>
-        )}
+                {toggleParams.length > 0 && (
+                  <div className="space-y-1 border-t border-border/60 pt-3">
+                    {toggleParams.map((p) => (
+                      <ParamControl
+                        key={p.name}
+                        param={p}
+                        value={values[p.name]}
+                        onChange={onChange}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Section>
+            </m.div>
+          )}
 
-        {colorParams.length > 0 && (
-          <Section title="Color">
-            {colorParams.map((p) => (
-              <ParamControl
-                key={p.name}
-                param={p}
-                value={values[p.name]}
-                onChange={onChange}
-              />
-            ))}
-          </Section>
-        )}
+          {colorParams.length > 0 && (
+            <m.div variants={sectionVariants}>
+              <Section title="Color">
+                {colorParams.map((p) => (
+                  <ParamControl
+                    key={p.name}
+                    param={p}
+                    value={values[p.name]}
+                    onChange={onChange}
+                  />
+                ))}
+              </Section>
+            </m.div>
+          )}
+        </m.div>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">

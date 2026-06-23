@@ -8,6 +8,7 @@ import {
   fadeRise,
   fadeRiseVariants,
   reducedFade,
+  staggerGroupVariants,
 } from "./motion";
 
 describe("motion tokens", () => {
@@ -79,5 +80,36 @@ describe("fadeRiseVariants (reduced-motion selection)", () => {
 
   it("plain fade is already reduced-safe (opacity only)", () => {
     expect(JSON.stringify(fade)).not.toContain('"y"');
+  });
+});
+
+describe("staggerGroupVariants (A5 — control-group reveal)", () => {
+  it("staggers children by STAGGER.step when motion is allowed", () => {
+    const v = staggerGroupVariants(false);
+    const visible = v.visible as { transition?: { staggerChildren?: number } };
+    expect(visible.transition?.staggerChildren).toBe(STAGGER.step);
+  });
+
+  it("collapses the stagger to 0 (instant group) under reduced motion", () => {
+    const v = staggerGroupVariants(true);
+    const visible = v.visible as { transition?: { staggerChildren?: number } };
+    expect(visible.transition?.staggerChildren).toBe(0);
+  });
+
+  it("orchestrates only (no transform/opacity on the container itself)", () => {
+    const v = staggerGroupVariants(false);
+    // The hidden state is empty: the container never moves; only its children
+    // (which use fadeRiseVariants) animate.
+    expect(v.hidden).toEqual({});
+    const json = JSON.stringify(v);
+    expect(json).not.toContain("scale");
+    expect(json).not.toContain('"y"');
+  });
+
+  it("keeps the worst-case total stagger within STAGGER.max for the 4-section group", () => {
+    // The control panel reveals at most 4 sections (header/presets/adjust/color).
+    const childCount = 4;
+    const total = STAGGER.step * (childCount - 1);
+    expect(total).toBeLessThanOrEqual(STAGGER.max);
   });
 });

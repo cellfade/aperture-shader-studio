@@ -95,6 +95,21 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   }, [dragging]);
   const reducedMotion = useReducedMotion();
   const noticeVariants = fadeRiseVariants(reducedMotion);
+  // A2 — the stage-contents crossfade on a photo↔video MODE switch. Opacity
+  // (+ a 4px rise when motion is allowed); opacity-only / hard-cut under reduced
+  // motion via `fadeRiseVariants`. This is a one-shot transient keyed on `mode`,
+  // not a sustained loop, so it's acceptable over the live canvas for the brief
+  // swap (D1) — nothing keeps animating on the persisting preview afterward.
+  const modeSwapVariants = fadeRiseVariants(reducedMotion);
+  // A2 — smooth the container resize (aspect/height changes when the mode
+  // switches) with a CSS transition, NOT Framer `layout`. CSS drives the
+  // container size; PreviewBox's ResizeObserver only *reads* the settled size,
+  // so there is no feedback loop to fight. Disabled under reduced motion (no
+  // resize tween). The class is a static literal so the Tailwind JIT can scan
+  // it; ~240ms ease-out per spec (in-band with the `slow` 280ms token).
+  const resizeTween = reducedMotion
+    ? ""
+    : "transition-[aspect-ratio,height] duration-[240ms] ease-out";
 
   const stageOpen = mode === "video" && !!videoUrl && videoStageOpen;
   const showVideoDrop = mode === "video" && !videoUrl;
@@ -226,60 +241,78 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
       <div className="flex flex-col lg:flex-row">
         {/* Canvas / stage area */}
         <div
-          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 lg:flex-1 ${areaSizing} ${
+          className={`relative flex items-center justify-center overflow-hidden bg-[#070809] p-3 sm:p-5 lg:flex-1 ${areaSizing} ${resizeTween} ${
             dragging ? "ring-2 ring-inset ring-foreground/30" : ""
           }`}
           style={stageOpen ? undefined : ({ "--ar": String(ar) } as CSSProperties)}
         >
-          {showDrop ? (
-            <DropPrompt
-              kind={mode}
-              onPick={browse}
-              onSample={
-                mode === "photo"
-                  ? () => loadSampleImage(sampleSrc, commitImage, flashNotice)
-                  : undefined
-              }
-            />
-          ) : stageOpen ? (
-            <VideoStage
-              key={videoUrl}
-              src={videoUrl!}
-              getInitialTime={() => lastVideoTimeRef.current}
-              onMeta={onVideoMeta}
-              onTime={(t) => {
-                lastVideoTimeRef.current = t;
-              }}
-              onCapture={onCaptureFrame}
-              onError={flashNotice}
-              // sequence export only makes sense for image-filter shaders (generative ignores the frame)
-              renderSequence={shader.takesImage ? renderSequence : undefined}
-              exportVideo={shader.takesImage ? runVideoExport : undefined}
-              shaderId={activeId}
-            />
-          ) : (
-            <PreviewBox ar={ar}>
-              {showCompare ? (
-                <CompareSlider
-                  beforeLabel="Original"
-                  afterLabel={humanize(shader.id)}
-                  before={
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={image!.url}
-                      alt={`${image!.name}, original`}
-                      // C3 — 1px inset outline so the "before" plate reads on the
-                      // same plane as the shader "after" layer.
-                      className="absolute inset-0 h-full w-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
-                    />
+          {/* A2 — cross-dissolve the stage CONTENTS on a photo↔video MODE
+             switch. Keyed on `mode` (NOT on the finer content state) so the
+             crossfade fires only when the mode flips, never on a within-mode
+             content change (drop→preview, compare on/off). `mode="wait"` keeps
+             at most one element animating; `fadeRiseVariants` hard-cuts under
+             reduced motion. The animating wrapper fills the stage but is removed
+             from flow after settle, leaving the live preview unwrapped. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <m.div
+              key={mode}
+              variants={modeSwapVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex h-full w-full items-center justify-center"
+            >
+              {showDrop ? (
+                <DropPrompt
+                  kind={mode}
+                  onPick={browse}
+                  onSample={
+                    mode === "photo"
+                      ? () => loadSampleImage(sampleSrc, commitImage, flashNotice)
+                      : undefined
                   }
-                  after={<ShaderView shader={shader} values={values} imageUrl={image?.url} />}
+                />
+              ) : stageOpen ? (
+                <VideoStage
+                  key={videoUrl}
+                  src={videoUrl!}
+                  getInitialTime={() => lastVideoTimeRef.current}
+                  onMeta={onVideoMeta}
+                  onTime={(t) => {
+                    lastVideoTimeRef.current = t;
+                  }}
+                  onCapture={onCaptureFrame}
+                  onError={flashNotice}
+                  // sequence export only makes sense for image-filter shaders (generative ignores the frame)
+                  renderSequence={shader.takesImage ? renderSequence : undefined}
+                  exportVideo={shader.takesImage ? runVideoExport : undefined}
+                  shaderId={activeId}
                 />
               ) : (
-                <ShaderView shader={shader} values={values} imageUrl={image?.url} />
+                <PreviewBox ar={ar}>
+                  {showCompare ? (
+                    <CompareSlider
+                      beforeLabel="Original"
+                      afterLabel={humanize(shader.id)}
+                      before={
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={image!.url}
+                          alt={`${image!.name}, original`}
+                          // C3 — 1px inset outline so the "before" plate reads on the
+                          // same plane as the shader "after" layer.
+                          className="absolute inset-0 h-full w-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
+                        />
+                      }
+                      after={<ShaderView shader={shader} values={values} imageUrl={image?.url} />}
+                    />
+                  ) : (
+                    <ShaderView shader={shader} values={values} imageUrl={image?.url} />
+                  )}
+                </PreviewBox>
               )}
-            </PreviewBox>
-          )}
+            </m.div>
+          </AnimatePresence>
 
           {/* A8 — dashed drop overlay: always mounted, fades in (~120ms opacity)
              on drag instead of popping. Chrome only — sits above, never over,

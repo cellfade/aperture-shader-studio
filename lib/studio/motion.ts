@@ -127,3 +127,23 @@ export const reducedFade: Variants = {
 export function fadeRiseVariants(reducedMotion: boolean): Variants {
   return reducedMotion ? reducedFade : fadeRise;
 }
+
+/**
+ * Orchestration container for a one-group staggered reveal (PRD §4.1: stagger
+ * used sparingly, capped). Children should use `fadeRiseVariants(reducedMotion)`
+ * so each one fades/rises (or, under reduced motion, fades only). Under reduced
+ * motion the per-child delay collapses to 0, so the whole group appears at once
+ * with no movement. The step is capped by `STAGGER.step`; keep groups small so
+ * the total never exceeds `STAGGER.max`.
+ */
+export function staggerGroupVariants(reducedMotion: boolean): Variants {
+  return {
+    hidden: {},
+    visible: {
+      transition: {
+        staggerChildren: reducedMotion ? 0 : STAGGER.step,
+        staggerDirection: 1,
+      },
+    },
+  };
+}

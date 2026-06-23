@@ -238,6 +238,47 @@
   animation: drop-settle 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* A7 — export progress: a 1px monochrome indeterminate hairline shimmer along
+   the export button's BOTTOM edge while `working` (~1.2s loop). Restrained, not
+   a spinner — a short bright segment travels left→right over a faint base line.
+   This lives on the VISIBLE button only and is fully decoupled from the
+   off-screen ExportRenderer (D2). The global reduced-motion backstop below
+   neutralises the keyframe, so reduced-motion users get a static "Rendering…"
+   with no shimmer. */
+@keyframes export-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.export-shimmer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  overflow: hidden;
+  /* faint base hairline so the edge always reads */
+  background: rgba(255, 255, 255, 0.12);
+}
+.export-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* a short bright travelling segment */
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.85) 50%,
+    transparent 100%
+  );
+  width: 40%;
+  animation: export-shimmer 1.2s linear infinite;
+}
+
 @keyframes rise {
   from {
     opacity: 0;

@@ -7,7 +7,9 @@ import { fadeRiseVariants } from "@/lib/studio/motion";
 import { useReducedMotion } from "@/lib/studio/use-media-query";
 import { CompareSlider } from "@/components/compare-slider";
 import { ControlPanel } from "@/components/studio/control-panel";
+import { PreviewCrossfade } from "@/components/studio/preview-crossfade";
 import { ShaderView } from "@/components/studio/shader-view";
+import { ExportCheck, ExportShimmer } from "@/components/studio/export-beat";
 import { ExportRenderer } from "@/components/studio/export-renderer";
 import { BatchExportRenderer } from "@/components/studio/batch-export-renderer";
 import { VideoStage } from "@/components/studio/video-stage";
@@ -221,8 +223,12 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                   }}
                   aria-disabled={exportStatus === "working" || undefined}
                   aria-busy={exportStatus === "working" || undefined}
-                  className="touch-target inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="touch-target relative overflow-hidden inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
+                  {/* A7 — on `done`, a single checkmark draws on then settles for
+                     the ~1.6s "Downloaded ✓" dwell. Decoupled from the off-screen
+                     renderer (D2): reads only `exportStatus`. */}
+                  {exportStatus === "done" && <ExportCheck />}
                   {exportStatus === "working"
                     ? "Rendering…"
                     : exportStatus === "done"
@@ -230,6 +236,9 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                       : exportStatus === "error"
                         ? "Retry"
                         : "Download PNG"}
+                  {/* A7 — indeterminate hairline shimmer on the bottom edge while
+                     working. Visible-button-only; no off-screen render coupling. */}
+                  {exportStatus === "working" && <ExportShimmer />}
                 </button>
               )}
             </>
@@ -290,6 +299,14 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                 />
               ) : (
                 <PreviewBox ar={ar}>
+                  {/* A1 (hero) — the shader-switch crossfade + exposure wipe.
+                     Keyed on `shader.id` so a switch dissolves the preview; the
+                     live preview (param tweaks, compare drag) re-renders WITHOUT
+                     re-mounting the canvas because PreviewCrossfade re-derives
+                     `children` from props every render. In compare-on the
+                     crossfade wraps ONLY the `after` shader layer, leaving the
+                     CompareSlider's seam/clip-path/drag untouched; in compare-off
+                     it wraps the bare preview. ≤2 canvases at any instant (D1). */}
                   {showCompare ? (
                     <CompareSlider
                       beforeLabel="Original"
@@ -304,10 +321,16 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                           className="absolute inset-0 h-full w-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
                         />
                       }
-                      after={<ShaderView shader={shader} values={values} imageUrl={image?.url} />}
+                      after={
+                        <PreviewCrossfade layerKey={shader.id}>
+                          <ShaderView shader={shader} values={values} imageUrl={image?.url} />
+                        </PreviewCrossfade>
+                      }
                     />
                   ) : (
-                    <ShaderView shader={shader} values={values} imageUrl={image?.url} />
+                    <PreviewCrossfade layerKey={shader.id}>
+                      <ShaderView shader={shader} values={values} imageUrl={image?.url} />
+                    </PreviewCrossfade>
                   )}
                 </PreviewBox>
               )}

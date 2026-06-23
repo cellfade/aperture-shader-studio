@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ExportShimmer } from "@/components/studio/export-beat";
 import { captureVideoFrame } from "@/lib/studio/capture-frame";
 import { clampToMaxSide } from "@/lib/studio/download";
 import { zipAndDownloadFrames } from "@/lib/studio/zip-frames";
@@ -613,9 +614,13 @@ export function VideoStage({
                 aria-disabled={seqDisabled || undefined}
                 aria-describedby={seqDisabled ? "seq-reason" : undefined}
                 aria-label={running ? "Cancel frame export" : "Export frames as a zip"}
-                className={`rounded-md border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent ${FOCUS}`}
+                className={`relative overflow-hidden rounded-md border border-border px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/10 aria-disabled:text-muted-foreground aria-disabled:hover:bg-transparent ${FOCUS}`}
               >
                 {running ? "Cancel" : "Frames · zip"}
+                {/* A7 — indeterminate hairline shimmer while the frame export
+                   runs. Visible-button-only; the off-screen BatchExportRenderer
+                   and its timing are untouched (D2). */}
+                {running && <ExportShimmer />}
               </button>
             )}
             {/* Video → mp4 (primary, filled). */}
@@ -629,9 +634,13 @@ export function VideoStage({
                 aria-disabled={vidDisabled || undefined}
                 aria-describedby={vidDisabled ? "vid-reason" : undefined}
                 aria-label={vidRunning ? "Cancel MP4 export" : "Export filtered video as MP4"}
-                className={`rounded-md border border-foreground/30 bg-foreground/[0.08] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:border-border aria-disabled:bg-transparent aria-disabled:hover:bg-transparent ${FOCUS}`}
+                className={`relative overflow-hidden rounded-md border border-foreground/30 bg-foreground/[0.08] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:border-border aria-disabled:bg-transparent aria-disabled:hover:bg-transparent ${FOCUS}`}
               >
                 {vidRunning ? "Cancel" : "Video · mp4"}
+                {/* A7 — indeterminate hairline shimmer while the MP4 export runs.
+                   Visible-button-only; the WebCodecs export path, timing, and
+                   frame-buffer discipline are untouched (D2). */}
+                {vidRunning && <ExportShimmer />}
               </button>
             )}
           </div>

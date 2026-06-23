@@ -129,6 +129,77 @@ export function fadeRiseVariants(reducedMotion: boolean): Variants {
 }
 
 /**
+ * A1 (hero) — the shader-switch preview crossfade. The incoming canvas fades up
+ * from `opacity 0, scale .985` to rest while the outgoing fades under it. Enter
+ * is the deliberate beat (~220ms, ease-out); exit is softer/shorter (~160ms) so
+ * the old plate recedes without tugging. This is the ONE orchestrated moment the
+ * subtle-precise system spends its boldness on (PRD §4.4); it is a one-shot
+ * transient keyed on `shader.id`, never a sustained loop over the live canvas.
+ */
+export const HERO_CROSSFADE = {
+  /** Incoming canvas enter beat. */
+  enter: DURATIONS.slow - 0.06, // 0.22s
+  /** Outgoing canvas exit — softer + shorter so dismissal never pulls the eye. */
+  exit: DURATIONS.base - 0.02, // 0.16s
+  /** Initial scale of the incoming canvas (precise, not a "pop"). */
+  scaleFrom: 0.985,
+} as const;
+
+export const heroCrossfade: Variants = {
+  hidden: { opacity: 0, scale: HERO_CROSSFADE.scaleFrom },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: HERO_CROSSFADE.enter, ease: EASINGS.easeOut },
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: HERO_CROSSFADE.exit, ease: EASINGS.easeOut },
+  },
+};
+
+/**
+ * Reduced-motion counterpart of {@link heroCrossfade}: an instant hard cut — no
+ * crossfade overlap, no scale, no wipe (FR-A1). Opacity snaps 0↔1 with zero
+ * duration so the swap reads as the pre-motion behaviour (a clean cut).
+ */
+export const heroCrossfadeReduced: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: DURATIONS.instant } },
+  exit: { opacity: 0, transition: { duration: DURATIONS.instant } },
+};
+
+/**
+ * Pick the preview-crossfade variant for the current reduced-motion preference.
+ * Under reduced motion the swap is an instant hard cut (no overlap/scale/wipe).
+ */
+export function heroCrossfadeVariants(reducedMotion: boolean): Variants {
+  return reducedMotion ? heroCrossfadeReduced : heroCrossfade;
+}
+
+/**
+ * A1 (hero) — the single one-pass "exposure wipe": a 1px white line that sweeps
+ * left→right once across the frame as the crossfade plays, reusing the seam-glow
+ * vocabulary (monochrome, hairline). It plays once per switch — NOT a loop. The
+ * wipe runs slightly longer than the enter beat so it crosses the full plate as
+ * the new canvas settles, then unmounts. Suppressed entirely under reduced
+ * motion (the component skips rendering it).
+ */
+export const EXPOSURE_WIPE = {
+  /** Sweep duration — spans the crossfade overlap. */
+  duration: DURATIONS.slow, // 0.28s
+} as const;
+
+export const exposureWipe: Variants = {
+  hidden: { left: "-2%", opacity: 0 },
+  visible: {
+    left: ["-2%", "102%"],
+    opacity: [0, 1, 1, 0],
+    transition: { duration: EXPOSURE_WIPE.duration, ease: EASINGS.easeInOut },
+  },
+};
+
+/**
  * Orchestration container for a one-group staggered reveal (PRD §4.1: stagger
  * used sparingly, capped). Children should use `fadeRiseVariants(reducedMotion)`
  * so each one fades/rises (or, under reduced motion, fades only). Under reduced

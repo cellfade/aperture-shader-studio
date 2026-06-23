@@ -3,10 +3,16 @@ import {
   DISTANCES,
   DURATIONS,
   EASINGS,
+  EXPOSURE_WIPE,
+  HERO_CROSSFADE,
   STAGGER,
+  exposureWipe,
   fade,
   fadeRise,
   fadeRiseVariants,
+  heroCrossfade,
+  heroCrossfadeReduced,
+  heroCrossfadeVariants,
   reducedFade,
   staggerGroupVariants,
 } from "./motion";
@@ -80,6 +86,70 @@ describe("fadeRiseVariants (reduced-motion selection)", () => {
 
   it("plain fade is already reduced-safe (opacity only)", () => {
     expect(JSON.stringify(fade)).not.toContain('"y"');
+  });
+});
+
+describe("heroCrossfadeVariants (A1 — shader-switch hero crossfade)", () => {
+  it("enters fade+scale and exits softer/shorter when motion is allowed", () => {
+    const v = heroCrossfadeVariants(false);
+    expect(v).toBe(heroCrossfade);
+    // incoming starts at opacity 0 + a slight downscale, settles to 1/1
+    expect(v.hidden).toMatchObject({ opacity: 0, scale: HERO_CROSSFADE.scaleFrom });
+    expect(v.visible).toMatchObject({ opacity: 1, scale: 1 });
+    // exit is softer (shorter) than enter — dismissal never tugs
+    expect(HERO_CROSSFADE.exit).toBeLessThan(HERO_CROSSFADE.enter);
+    // ~220ms in / ~160ms out per spec
+    expect(HERO_CROSSFADE.enter).toBeCloseTo(0.22, 3);
+    expect(HERO_CROSSFADE.exit).toBeCloseTo(0.16, 3);
+    // scale is precise (close to 1), not a "pop"
+    expect(HERO_CROSSFADE.scaleFrom).toBeGreaterThanOrEqual(0.98);
+  });
+
+  it("hard-cuts (instant, opacity-only, no scale) under reduced motion", () => {
+    const v = heroCrossfadeVariants(true);
+    expect(v).toBe(heroCrossfadeReduced);
+    const json = JSON.stringify(v);
+    // no scale/translate anywhere — purely an instant opacity swap
+    expect(json).not.toContain("scale");
+    expect(json).not.toContain('"y"');
+    expect(json).not.toContain('"x"');
+    const visible = v.visible as { transition?: { duration?: number } };
+    const exit = v.exit as { transition?: { duration?: number } };
+    expect(visible.transition?.duration).toBe(DURATIONS.instant);
+    expect(exit.transition?.duration).toBe(DURATIONS.instant);
+  });
+
+  it("both branches share state keys for a clean swap", () => {
+    expect(Object.keys(heroCrossfadeVariants(false)).sort()).toEqual(
+      Object.keys(heroCrossfadeVariants(true)).sort(),
+    );
+  });
+
+  it("uses the ease-out curve for the enter beat", () => {
+    const visible = heroCrossfade.visible as { transition?: { ease?: unknown } };
+    expect(visible.transition?.ease).toEqual(EASINGS.easeOut);
+  });
+});
+
+describe("exposureWipe (A1 — one-pass exposure wipe)", () => {
+  it("sweeps left→right exactly once (not a loop) over the crossfade", () => {
+    const visible = exposureWipe.visible as {
+      left?: unknown;
+      transition?: { duration?: number; repeat?: number };
+    };
+    // travels off-left to off-right in a single pass
+    expect(visible.left).toEqual(["-2%", "102%"]);
+    // no repeat configured → plays once
+    expect(visible.transition?.repeat).toBeUndefined();
+    // spans the crossfade window
+    expect(visible.transition?.duration).toBe(EXPOSURE_WIPE.duration);
+    expect(EXPOSURE_WIPE.duration).toBeLessThanOrEqual(DURATIONS.slow);
+  });
+
+  it("fades in then out so the line never lingers", () => {
+    const visible = exposureWipe.visible as { opacity?: number[] };
+    expect(visible.opacity?.[0]).toBe(0);
+    expect(visible.opacity?.[visible.opacity.length - 1]).toBe(0);
   });
 });
 

@@ -114,7 +114,15 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     : "transition-[aspect-ratio,height] duration-[240ms] ease-out";
 
   const stageOpen = mode === "video" && !!videoUrl && videoStageOpen;
-  const showVideoDrop = mode === "video" && !videoUrl;
+  // B2 — video mode before any video is loaded. In this state the photo-frame
+  // actions (Recapture / Download PNG / Compare) and a previously-loaded photo's
+  // status ("sample.jpg 1600×1000") are stale: they refer to a photo, not to the
+  // video the user is being asked to load. We suppress that photo chrome and make
+  // the status communicate the actual task. A loaded photo is PRESERVED in state
+  // (still in `image`) and re-appears on switching back to photo mode — only its
+  // chrome is hidden here, never the data.
+  const awaitingVideo = mode === "video" && !videoUrl;
+  const showVideoDrop = awaitingVideo;
   const showPhotoDrop = mode === "photo" && shader.takesImage && !image;
   const showDrop = showVideoDrop || showPhotoDrop;
   const ar = stageOpen
@@ -124,26 +132,32 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     : image
       ? image.w / image.h
       : 16 / 10;
-  const canCompare = shader.category === "image-filter" && !!image && !stageOpen;
+  const canCompare =
+    shader.category === "image-filter" && !!image && !stageOpen && !awaitingVideo;
   const showCompare = canCompare && compareOn;
 
   const browse = () => fileInput.current?.click();
   const canDownload =
-    !stageOpen && (!!image || (mode === "photo" && shader.category === "generative"));
+    !stageOpen &&
+    !awaitingVideo &&
+    (!!image || (mode === "photo" && shader.category === "generative"));
   const statusLabel = stageOpen
     ? (videoName ?? "Video")
-    : image
-      ? image.name
-      : mode === "video"
-        ? "No frame captured"
+    : awaitingVideo
+      ? "Load a video to begin"
+      : image
+        ? image.name
         : "No photo";
-  const statusDims = stageOpen
-    ? videoDims
-      ? `${videoDims.w}×${videoDims.h}`
-      : ""
-    : image
-      ? `${image.w}×${image.h}`
-      : "";
+  const statusDims =
+    stageOpen
+      ? videoDims
+        ? `${videoDims.w}×${videoDims.h}`
+        : ""
+      : awaitingVideo
+        ? ""
+        : image
+          ? `${image.w}×${image.h}`
+          : "";
 
   const areaSizing = stageOpen
     ? "h-[62vh] min-h-[360px] lg:h-[clamp(440px,72vh,760px)]"
@@ -190,7 +204,10 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
             </button>
           ) : (
             <>
-              {mode === "video" && image && (
+              {/* B2 — "Recapture" reopens the video stage to grab another frame;
+                 only meaningful once a video has actually been loaded, so it is
+                 suppressed while awaiting one (videoUrl is null). */}
+              {mode === "video" && image && !awaitingVideo && (
                 <button
                   type="button"
                   onClick={() => setVideoStageOpen(true)}
@@ -201,7 +218,13 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
               )}
               {(image || mode === "video") && (
                 <button type="button" onClick={browse} className={GHOST_BTN}>
-                  {mode === "video" ? "New video" : "Replace"}
+                  {/* B2 — before a video exists the browse action IS the primary
+                     task ("Load video"); afterwards it replaces the loaded one. */}
+                  {mode === "video"
+                    ? awaitingVideo
+                      ? "Load video"
+                      : "New video"
+                    : "Replace"}
                 </button>
               )}
               {canCompare && (
@@ -449,6 +472,15 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => voi
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(m)}
             onKeyDown={(e) => {
+              // B3 — arrow keys move the radiogroup selection (standard ARIA
+              // radiogroup keyboard pattern). This is NON-destructive: `onChange`
+              // is the studio's `setMode`, which only flips the active VIEW; the
+              // loaded photo (`image`) and video (`videoUrl`/`videoFileRef`) are
+              // held in separate state and are preserved across the switch — they
+              // reappear on switching back. So no confirmation dialog is needed
+              // (that would betray the minimal direction); the only state touched
+              // is `mode`. Verified: see use-studio-state.ts (`setMode` is the raw
+              // setter; no media is cleared on a mode flip).
               if (e.key.startsWith("Arrow")) {
                 e.preventDefault();
                 onChange(m === "photo" ? "video" : "photo");

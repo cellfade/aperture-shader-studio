@@ -15,6 +15,12 @@ const MIN_FRAMES = 2;
 const MAX_FRAMES = 30;
 const DEFAULT_FRAMES = 8;
 
+/** Clamp a (possibly fractional / out-of-range) frame count into [MIN, MAX]. */
+export function clampFrames(n: number): number {
+  if (!Number.isFinite(n)) return MIN_FRAMES;
+  return Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(n)));
+}
+
 function fmt(t: number): string {
   if (!Number.isFinite(t)) return "0:00";
   const m = Math.floor(t / 60);
@@ -293,7 +299,7 @@ export function VideoStage({
   const runSequence = useCallback(async () => {
     const v = videoRef.current;
     if (!v || running || !renderSequence) return;
-    const n = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(count)));
+    const n = clampFrames(count);
     const lo = Math.max(0, Math.min(inTime, outTime));
     const hi = Math.min(duration, Math.max(inTime, outTime));
     if (!(hi > lo)) return;
@@ -576,8 +582,22 @@ export function VideoStage({
               out {fmt(outTime)}
             </span>
             {renderSequence && (
-              <label className="ms-1 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
-                Frames
+              <div className="ms-1 flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                <span id="frame-count-label">Frames</span>
+                {/* B7 — +/− steppers flank the count so the control is usable on
+                   touch (the bare number field was 14px / touch-hostile). Each
+                   button + the field carry the Phase-J `touch-target` 44px coarse
+                   hit area. The value is clamped to [MIN_FRAMES, MAX_FRAMES] in
+                   every path (typed, stepped); export logic is untouched. */}
+                <button
+                  type="button"
+                  onClick={() => setCount((c) => clampFrames(c - 1))}
+                  disabled={anyRunning || count <= MIN_FRAMES}
+                  aria-label="Fewer frames"
+                  className={`touch-target grid size-7 place-items-center rounded-md border border-border text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-40 disabled:hover:bg-transparent ${FOCUS}`}
+                >
+                  <MinusIcon />
+                </button>
                 <input
                   type="number"
                   inputMode="numeric"
@@ -585,15 +605,24 @@ export function VideoStage({
                   max={MAX_FRAMES}
                   value={count}
                   disabled={anyRunning}
+                  aria-labelledby="frame-count-label"
                   aria-label="Frame count (2 to 30)"
                   onChange={(e) => {
                     const n = parseInt(e.target.value, 10);
-                    if (Number.isNaN(n)) setCount(MIN_FRAMES);
-                    else setCount(Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, n)));
+                    setCount(Number.isNaN(n) ? MIN_FRAMES : clampFrames(n));
                   }}
-                  className={`w-14 rounded-md border border-border bg-transparent px-2 py-1 text-center font-mono text-[12px] tabular-nums text-foreground disabled:opacity-50 ${FOCUS}`}
+                  className={`touch-target w-12 rounded-md border border-border bg-transparent px-2 py-1 text-center font-mono text-[12px] tabular-nums text-foreground disabled:opacity-50 ${FOCUS}`}
                 />
-              </label>
+                <button
+                  type="button"
+                  onClick={() => setCount((c) => clampFrames(c + 1))}
+                  disabled={anyRunning || count >= MAX_FRAMES}
+                  aria-label="More frames"
+                  className={`touch-target grid size-7 place-items-center rounded-md border border-border text-foreground transition-colors hover:bg-foreground/10 disabled:opacity-40 disabled:hover:bg-transparent ${FOCUS}`}
+                >
+                  <PlusIcon />
+                </button>
+              </div>
             )}
           </div>
 
@@ -698,6 +727,20 @@ function PauseIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M6 5h4v14H6zM14 5h4v14h-4z" />
+    </svg>
+  );
+}
+function MinusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+function PlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+      <path d="M12 5v14M5 12h14" />
     </svg>
   );
 }

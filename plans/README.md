@@ -82,3 +82,41 @@ Same gate every phase: `npx eslint .` (0) + `npx tsc --noEmit` + `npx next build
 - **Shareable URL state**: `useUrlState` hook syncing `activeId` + `values` (not the image) to the URL hash, with graceful invalid-state handling.
 
 Held for later: #38 mp4-muxer → Mediabunny migration (riskiest, not yet pressing); #15 VFR timestamp normalization; #39 Tailwind purge (v4 already tree-shakes).
+
+## Motion & UX polish (Phases I–M) — ✅ shipped
+
+PRD: `docs/prds/2026-06-23-motion-ux-quality.md`. Took the app from "static &
+clean" to a coherent, restrained **motion system** (Framer Motion / `motion`)
+plus a full UX/state-clarity + quality/a11y/perf pass — without betraying the
+monochrome "optical lab" identity or regressing the WebGL preview / export
+pipelines. Same gated discipline as A–H: every phase passed
+eslint 0 / tsc / `npm test` / `next build` + a live PNG (and, where relevant,
+MP4) export smoke + an axe pass.
+
+- **Phase I — Motion foundation.** `lib/studio/motion.ts` (tokens + variants, the
+  single source of truth); `MotionProvider` = `MotionConfig reducedMotion="user"`
+  + `LazyMotion`/`domAnimation`/`m` (feature bundle code-split off the initial
+  route); `@axe-core/playwright` gate added; JS/FPS baseline recorded. Proven on
+  one low-risk surface.
+- **Phase J — CSS-only polish & a11y.** B1 ≥44px coarse-pointer touch targets, A3
+  compare-grab, A4+C2 switch-thumb (killed `transition:all`), A8 drag-drop
+  affordance, B4 first-load sweep gate, C1+C6 concentric radius + on-grid spacing,
+  C3 photo outline, C4+C5 type/orphans, B6 reset hint, B8 microcopy.
+- **Phase K — Framer micro-interactions.** A2 mode crossfade + CSS resize settle,
+  A5 staggered control-group reveal, A6 inline notice entrance, A9 masthead
+  develop-in — all reduced-motion hard-cut, within the JS budget.
+- **Phase L — hero + export beat.** A1 shader-switch preview crossfade + one-pass
+  exposure wipe (the single orchestrated moment), A7 export hairline shimmer +
+  draw-on completion check — built against D1/D2 (≤2 canvases for the overlap;
+  motion on the visible button DOM only; off-screen renderers untouched).
+- **Phase M — state clarity + comprehensive QA.** B2 video-mode-before-video
+  (suppressed stale photo chrome; status reads "Load a video to begin"; photo
+  state preserved across mode switches), B3 mode arrow-key guard (verified
+  **non-destructive** — minimal comment, no dialog), B5 editable/validated hex
+  colour fields (`lib/studio/hex-color.ts` + `HexInput`), B7 sequence "Frames"
+  +/− stepper with 44px hit areas + clamp, C7 verified (contrast holds — 0 axe
+  findings). Full axe sweep = **0 serious/critical (0 of any impact)** across
+  default / sample / video-awaiting / reduced-motion; perf re-measured (initial
+  route 167.60 KB gzip, motion code-split off-route — within budget); test suite
+  **167 → 213**; AGENTS.md gained a Motion-system section; PRD §10 metrics filled
+  with real numbers.

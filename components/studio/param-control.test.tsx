@@ -154,6 +154,49 @@ describe("ParamControl (boolean) — invalid values", () => {
   });
 });
 
+describe("ParamControl (color) — B5 editable hex field", () => {
+  const colorParam = makeParam({
+    name: "tint",
+    label: "Tint",
+    control: "color",
+    default: "#9ee7ff",
+  });
+
+  it("renders an editable hex text input reflecting the value", () => {
+    render(<ParamControl param={colorParam} value="#9ee7ff" onChange={() => {}} />);
+    const field = screen.getByRole("textbox", { name: /tint hex value/i });
+    expect(field).toHaveValue("#9ee7ff");
+  });
+
+  it("commits a normalized #rrggbb on blur through onChange(name, value)", async () => {
+    const onChange = vi.fn();
+    render(<ParamControl param={colorParam} value="#9ee7ff" onChange={onChange} />);
+    const field = screen.getByRole("textbox", { name: /tint hex value/i });
+    await userEvent.clear(field);
+    await userEvent.type(field, "abc"); // shorthand, no #
+    await userEvent.tab(); // blur → commit
+    expect(onChange).toHaveBeenCalledWith("tint", "#aabbcc");
+  });
+
+  it("reverts to the prior value on an invalid blur (no onChange)", async () => {
+    const onChange = vi.fn();
+    render(<ParamControl param={colorParam} value="#9ee7ff" onChange={onChange} />);
+    const field = screen.getByRole("textbox", { name: /tint hex value/i });
+    await userEvent.clear(field);
+    await userEvent.type(field, "nope");
+    await userEvent.tab();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(field).toHaveValue("#9ee7ff");
+  });
+
+  it("keeps the native color swatch alongside the text field", () => {
+    const { container } = render(
+      <ParamControl param={colorParam} value="#9ee7ff" onChange={() => {}} />,
+    );
+    expect(container.querySelector('input[type="color"]')).not.toBeNull();
+  });
+});
+
 /** Set a controlled input's value and dispatch a React-observed input event. */
 function fireInput(el: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(

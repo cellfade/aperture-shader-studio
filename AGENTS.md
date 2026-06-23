@@ -80,6 +80,52 @@ separate `e2e` job for the Playwright smoke).
   breaking changes under patch versions. `.npmrc` sets `save-exact=true`; keep
   new deps pinned.
 
+## Motion system (Phases I–M)
+
+Motion is a **system**, not ad-hoc animations — all of it derives from one
+module and obeys a hard performance/accessibility budget.
+
+- **Tokens + variants live in `lib/studio/motion.ts`** (the single source of
+  truth): `DURATIONS` (instant/fast 0.12 / base 0.18 / slow 0.28 / hero ≤0.6s),
+  `EASINGS` (`easeOut`, `easeInOut`, a non-overshoot `settle` spring), `DISTANCES`
+  (4–10px reveal offsets), `STAGGER`, and ready-made `Variants` (`fade`,
+  `fadeRise`, `crossfade`, `heroCrossfade`, `exposureWipe`, …). **Never scatter
+  magic numbers** in components — import from here so the system stays tunable in
+  one place. Each fade+transform variant has a `*Variants(reducedMotion)` helper
+  (e.g. `fadeRiseVariants`, `heroCrossfadeVariants`) that returns an opacity-only
+  hard-cut under reduced motion.
+- **`MotionProvider` (`components/studio/motion-provider.tsx`)** wraps the Studio
+  subtree with `<MotionConfig reducedMotion="user">` + `<LazyMotion features={…}
+  strict>`. `features` async-imports only the **`domAnimation`** bundle
+  (`motion-features.ts`) so it is **code-split OFF the initial route** (motion
+  adds ~0 KB to the critical path). Stay on `domAnimation` — do **not** escalate
+  to `domMax`/`layout` (bigger bundle); container resizes use a CSS transition,
+  not Framer `layout`.
+- **Use `m.*`, never `motion.*`.** `LazyMotion … strict` makes any accidental
+  full-`motion` import throw in dev — that's intentional; it keeps the bundle
+  tree-shaken to the loaded feature set.
+- **Reduced motion is a hard requirement.** Every JS-driven (`AnimatePresence` /
+  `m.*`) animation must read `useReducedMotion()` from
+  `lib/studio/use-media-query.ts` (SSR-safe `useSyncExternalStore`) and collapse
+  to opacity-only or instant — never translate/scale/large-movement. CSS-only
+  transitions are covered by the global `@media (prefers-reduced-motion: reduce)`
+  backstop in `app/globals.css`; keep both.
+- **Perf/scope guardrails (do-not-touch): D1** — never animate over the live
+  WebGL canvas; crossfades are one-shot transients keyed on the swap, ≤2 canvases
+  coexisting only for the brief overlap, nothing loops on the preview afterward.
+  **D2** — export progress/completion motion (`export-beat.tsx`) lives on the
+  **visible button DOM only**, fully decoupled from the off-screen renderers; it
+  reads display status, never renderer internals. Never touch the off-screen
+  render cores (`export-renderer` / `batch-export-renderer` / `frame-renderer`),
+  `lib/studio/video-export/*`, `render-readiness.ts`, or the URL-state post-mount
+  hydration. **JS budget:** incremental motion JS ≤ ~18 KB gzip on the initial
+  route (met with margin — feature bundle is code-split, see PRD §10).
+- **Accessibility gate.** `@axe-core/playwright` runs in `e2e/a11y.spec.ts`
+  (`npm run test:a11y`) across default / sample-loaded / video-mode-awaiting /
+  reduced-motion surfaces and **asserts 0 serious/critical** violations (currently
+  0 of any impact). The reduced-motion case is emulated (`reducedMotion: "reduce"`)
+  and is part of the gate, not an afterthought.
+
 ## Gotchas
 
 - **macOS `* 2.ts` files**: a stale `.next/` can leave duplicate

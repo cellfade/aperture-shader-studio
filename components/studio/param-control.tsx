@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState } from "react";
 import type { Param, ParamValue } from "@/lib/studio/registry";
+import { isValidHex, normalizeHex } from "@/lib/studio/hex-color";
 
 const FOCUS =
   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -151,19 +152,18 @@ function ParamControlImpl({ param, value, onChange }: Props) {
     case "color": {
       const hex = typeof value === "string" ? value : "#9ee7ff";
       return (
-        <label className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <span className="text-[13px] text-foreground/80">{param.label}</span>
           <span className="flex items-center gap-2">
-            <span className="font-mono text-[11px] uppercase tabular-nums text-muted-foreground">
-              {hex}
-            </span>
-            <Swatch
-              color={hex}
-              label={param.label}
-              onChange={(c) => set(c)}
-            />
+            {/* B5 — the hex is an editable, validated text field (was static
+               text). Accepts #rgb/#rrggbb (and bare, mixed-case), normalizes to
+               #rrggbb on commit, and falls back to the prior value on invalid
+               blur. Commits through the same `set` → onChange(name,value) path
+               so the live preview + URL state update identically to the swatch. */}
+            <HexInput value={hex} label={param.label} onCommit={(c) => set(c)} />
+            <Swatch color={hex} label={param.label} onChange={(c) => set(c)} />
           </span>
-        </label>
+        </div>
       );
     }
 
@@ -205,6 +205,68 @@ function ParamControlImpl({ param, value, onChange }: Props) {
  */
 export const ParamControl = memo(ParamControlImpl);
 ParamControl.displayName = "ParamControl";
+
+/**
+ * Editable, validated hex text field (B5). Locally controlled while focused so
+ * the user can type freely; commits a normalized `#rrggbb` on Enter or blur via
+ * `onCommit`. Invalid input on blur reverts to the last committed value (`value`
+ * prop) so the field never holds a value the preview can't render. Stays
+ * monochrome (mono-uppercase microtype, the shared focus ring).
+ */
+function HexInput({
+  value,
+  label,
+  onCommit,
+}: {
+  value: string;
+  label: string;
+  onCommit: (hex: string) => void;
+}) {
+  // `draft` holds the in-flight text only WHILE editing; `null` means "show the
+  // committed `value`". Deriving the displayed value this way (rather than
+  // syncing `value`→state in an effect) means an external update — swatch pick,
+  // preset load, URL-state restore — is reflected instantly with no effect and
+  // never clobbers what the user is actively typing.
+  const [draft, setDraft] = useState<string | null>(null);
+  const display = draft ?? value;
+
+  const commit = () => {
+    const normalized = draft === null ? null : normalizeHex(draft);
+    if (normalized && normalized !== value) onCommit(normalized);
+    setDraft(null); // leave editing mode → fall back to the committed `value`
+  };
+
+  const invalid = draft !== null && draft.trim() !== "" && !isValidHex(draft);
+
+  return (
+    <input
+      type="text"
+      inputMode="text"
+      spellCheck={false}
+      autoCapitalize="off"
+      autoCorrect="off"
+      value={display}
+      aria-label={`${label} hex value`}
+      aria-invalid={invalid || undefined}
+      maxLength={7}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setDraft(null);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className={`w-[8.5ch] rounded-md border bg-transparent px-1.5 py-0.5 text-right font-mono text-[11px] uppercase tabular-nums text-muted-foreground outline-none focus:text-foreground ${FOCUS} ${
+        invalid ? "border-foreground/40" : "border-transparent hover:border-border"
+      }`}
+    />
+  );
+}
 
 /** A small color swatch with a ≥40px touch target and a visible focus ring. */
 function Swatch({

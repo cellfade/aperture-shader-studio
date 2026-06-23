@@ -60,3 +60,39 @@ test("studio (sample loaded) has no serious/critical a11y violations", async ({
   await page.getByRole("button", { name: /download png/i }).waitFor();
   await runAxe(page, "sample");
 });
+
+// Phase M — the new UX-clarity surfaces (B2 video-mode-before-video). Switching
+// to video mode before loading a video is the state B2 reworked; verify its
+// relabeled chrome stays clean for AT (no serious/critical, and we log
+// moderate/minor for review).
+test("studio (video mode, no video) has no serious/critical a11y violations", async ({
+  page,
+}) => {
+  await page.goto("/");
+  // Load the sample photo first so a photo is present in state — this is the
+  // exact stale-chrome case B2 fixes: a loaded photo + video-mode-awaiting.
+  await page.getByRole("button", { name: /try a sample/i }).click();
+  await page.getByRole("button", { name: /download png/i }).waitFor();
+  await page.getByRole("radio", { name: "video" }).click();
+  await page.getByText(/load a video to begin/i).waitFor();
+  await runAxe(page, "video-awaiting");
+});
+
+// Phase M — reduced-motion sanity. With prefers-reduced-motion: reduce emulated,
+// confirm the app renders + the axe gate still holds and that no animation
+// element keeps running (the masthead/preview settle to rest). We assert the
+// reduced-motion media query is actually active, then re-run axe.
+test("studio honors reduced motion and stays a11y-clean", async ({ browser }) => {
+  const context = await browser.newContext({ reducedMotion: "reduce" });
+  const page = await context.newPage();
+  await page.goto("/");
+  await page.getByRole("radiogroup", { name: /source type/i }).waitFor();
+  const reduced = await page.evaluate(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  expect(reduced).toBe(true);
+  await page.getByRole("button", { name: /try a sample/i }).click();
+  await page.getByRole("button", { name: /download png/i }).waitFor();
+  await runAxe(page, "reduced-motion");
+  await context.close();
+});

@@ -115,7 +115,7 @@ export function ControlPanel({
                     key={p.name}
                     param={p}
                     value={values[p.name]}
-                    onChange={(v) => onChange(p.name, v)}
+                    onChange={onChange}
                   />
                 ))}
               </div>

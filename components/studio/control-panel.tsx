@@ -16,7 +16,7 @@ import {
 } from "@/lib/studio/registry";
 
 const FOOTER_BTN =
-  "font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "touch-target font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 interface Props {
   shader: Shader;
@@ -82,11 +82,11 @@ export function ControlPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mb-4">
-          <h2 className="font-display text-[15px] font-medium capitalize tracking-tight text-foreground">
+          <h2 className="font-display text-[17px] font-medium capitalize tracking-tight text-foreground">
             {shader.id.replace(/-/g, " ")}
           </h2>
           {shader.blurb && (
-            <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+            <p className="mt-1 text-[12px] leading-relaxed text-pretty text-muted-foreground">
               {shader.blurb}
             </p>
           )}
@@ -171,7 +171,7 @@ function Section({
       <h3 className="mb-3 border-b border-border pb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
         {title}
       </h3>
-      <div className="space-y-3.5">{children}</div>
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }

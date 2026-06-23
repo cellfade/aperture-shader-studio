@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useReducedMotion } from "@/lib/studio/use-media-query";
 
+// B4 — the orchestrated reveal sweep is a one-per-session hero beat, not a
+// per-load tic. This module-level flag latches after the first sweep so later
+// photo loads/replaces settle straight to rest. (Module scope = one browser
+// session; a full reload resets it, which is the intended "new session".)
+let hasSweptThisSession = false;
+
 interface CompareSliderProps {
   before: ReactNode;
   after: ReactNode;
@@ -18,6 +24,9 @@ export function CompareSlider({
 }: CompareSliderProps) {
   const reduced = useReducedMotion();
   const [pos, setPos] = useState(9);
+  // A3 — grab feedback: the inner dot dips to scale(.94) + a tighter glow while
+  // the handle is held, springing back on release (~120ms CSS transition).
+  const [grabbing, setGrabbing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const touched = useRef(false);
@@ -39,12 +48,15 @@ export function CompareSlider({
     const from = 9;
     const to = 56;
     const dur = 900;
-    if (reduced) {
+    // B4 — only the FIRST photo of the session gets the orchestrated sweep;
+    // reduced motion (or a later load) settles straight to rest.
+    if (reduced || hasSweptThisSession) {
       raf = requestAnimationFrame(() => {
         if (!touched.current) setPos(to);
       });
       return () => cancelAnimationFrame(raf);
     }
+    hasSweptThisSession = true;
     const tick = (t: number) => {
       if (touched.current) return;
       if (startedAt === null) startedAt = t;
@@ -60,6 +72,7 @@ export function CompareSlider({
   const onPointerDown = (e: React.PointerEvent) => {
     touched.current = true;
     dragging.current = true;
+    setGrabbing(true);
     containerRef.current?.setPointerCapture(e.pointerId);
     setFromClientX(e.clientX);
   };
@@ -69,6 +82,7 @@ export function CompareSlider({
   };
   const endDrag = (e: React.PointerEvent) => {
     dragging.current = false;
+    setGrabbing(false);
     containerRef.current?.releasePointerCapture?.(e.pointerId);
   };
 
@@ -135,10 +149,22 @@ export function CompareSlider({
         aria-valuenow={Math.round(pos)}
         aria-valuetext={`${Math.round(pos)}% revealed — ${afterLabel}`}
         onKeyDown={onKeyDown}
+        data-grabbing={grabbing || undefined}
         className="absolute top-1/2 z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize items-center justify-center rounded-full border border-white/45 bg-black/55 backdrop-blur-md outline-none transition-[box-shadow,transform] focus-visible:scale-110 focus-visible:ring-2 focus-visible:ring-ring"
-        style={{ left: `${pos}%`, boxShadow: "0 0 0 1px rgba(0,0,0,0.35), 0 0 16px rgba(255,255,255,0.22)" }}
+        style={{
+          left: `${pos}%`,
+          boxShadow: grabbing
+            ? "0 0 0 1px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.3)"
+            : "0 0 0 1px rgba(0,0,0,0.35), 0 0 16px rgba(255,255,255,0.22)",
+        }}
       >
-        <span className="block size-4 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.25)]" />
+        {/* A3 — inner dot dips to scale(.94) while grabbing, springs back on
+           release (~120ms). CSS-only; the reduced-motion backstop neutralises
+           the transition. */}
+        <span
+          className="block size-4 rounded-full bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.25)] transition-transform duration-[120ms] ease-out data-[grabbing]:scale-[0.94]"
+          data-grabbing={grabbing || undefined}
+        />
         <span className="absolute -left-3 text-white/85" aria-hidden>
           ‹
         </span>

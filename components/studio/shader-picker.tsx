@@ -37,7 +37,7 @@ export function ShaderPicker({
               type="button"
               aria-pressed={active}
               onClick={() => setCat(c.key)}
-              className={`flex-1 rounded-md px-2 py-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] transition-colors sm:py-1.5 ${FOCUS} ${
+              className={`touch-target flex-1 rounded-md px-2 py-2 text-center font-mono text-[10px] uppercase tracking-[0.12em] transition-colors sm:py-1.5 ${FOCUS} ${
                 active
                   ? "bg-secondary text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -63,7 +63,7 @@ export function ShaderPicker({
               aria-pressed={active}
               title={s.blurb}
               onClick={() => onSelect(s.id)}
-              className={`rounded-md border px-2.5 py-2 text-[12px] transition-colors sm:py-1.5 ${FOCUS} ${
+              className={`touch-target rounded-md border px-2.5 py-2 text-[12px] transition-colors sm:py-1.5 ${FOCUS} ${
                 active
                   ? "border-foreground/30 bg-foreground/10 text-foreground"
                   : "border-border bg-transparent text-muted-foreground hover:text-foreground"

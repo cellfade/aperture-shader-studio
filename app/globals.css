@@ -187,6 +187,28 @@
   text-wrap: balance;
 }
 
+/* B1 — coarse-pointer touch targets (≥44px hit area without growing the visual
+   size). A centered pseudo-element extends the clickable region to 44×44px on
+   touch/coarse pointers only; mouse/precise pointers keep the tight visual size.
+   The element must be `position: relative` for the absolute `::before` to anchor
+   to it (the utility sets it). Stays purely additive — no layout shift, no
+   colour, reduced-motion-irrelevant (no transition). */
+@media (pointer: coarse) {
+  .touch-target {
+    position: relative;
+  }
+  .touch-target::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    /* purely a hit area — never paints */
+  }
+}
+
 @keyframes seam-intro {
   from {
     left: 9%;
@@ -194,6 +216,26 @@
   to {
     left: 56%;
   }
+}
+
+/* A8 — drop settle: a single subtle scale dip on the stage *chrome* (never the
+   WebGL canvas) when a drop lands. 1.0 → 0.98 → 1.0, ~220ms, ease-out. The
+   global reduced-motion backstop below neutralises this animation (sets
+   animation-duration to ~0). */
+@keyframes drop-settle {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-drop-settle {
+  animation: drop-settle 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes rise {

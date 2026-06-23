@@ -33,7 +33,7 @@ export default function Home() {
           <h1 className="mt-5 max-w-[16ch] text-balance font-display text-5xl font-semibold leading-[1.05] tracking-tight text-foreground sm:text-7xl">
             A darkroom for WebGL shaders.
           </h1>
-          <p className="mt-7 max-w-[54ch] text-base leading-relaxed text-muted-foreground sm:text-lg">
+          <p className="mt-7 max-w-[54ch] text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
             Drop in a photo and push it through real-time effects — dither it,
             halftone it, melt it through fluted glass and liquid metal, and two
             dozen more. Tune every dial live, drag to compare before and after,

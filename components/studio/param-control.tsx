@@ -34,6 +34,7 @@ function ParamControlImpl({ param, value, onChange }: Props) {
   switch (param.control) {
     case "range": {
       const v = typeof value === "number" && Number.isFinite(value) ? value : param.min;
+      const def = typeof param.default === "number" ? param.default : param.min;
       return (
         <label className="block py-1.5">
           <div className="flex items-baseline justify-between gap-3">
@@ -50,6 +51,11 @@ function ParamControlImpl({ param, value, onChange }: Props) {
             value={v}
             aria-label={param.label}
             aria-valuetext={`${param.label} ${fmt(v, param.step)}`}
+            // B6 — surface the otherwise-hidden reset affordance (double-click or
+            // Backspace restores the default) via a native tooltip. Unobtrusive:
+            // no added visual clutter, and it folds into the slider's a11y name
+            // via `aria-valuetext` already present above.
+            title={`Double-click or press Backspace to reset to ${fmt(def, param.step)}`}
             onChange={(e) => {
               const n = parseFloat(e.target.value);
               if (Number.isFinite(n)) set(n);
@@ -61,7 +67,7 @@ function ParamControlImpl({ param, value, onChange }: Props) {
                 set(param.default);
               }
             }}
-            className="mt-2.5 h-1 w-full cursor-ew-resize rounded-full bg-border outline-none"
+            className="mt-3 h-1 w-full cursor-ew-resize rounded-full bg-border outline-none"
           />
         </label>
       );
@@ -84,8 +90,11 @@ function ParamControlImpl({ param, value, onChange }: Props) {
               on ? "border-foreground/40 bg-foreground/25" : "border-border bg-secondary"
             }`}
           >
+            {/* A4+C2 — crisp thumb slide. Scoped to `left`+`background-color`
+               (not the flagged `transition-all`), ~160ms ease-out. CSS-only, so
+               the reduced-motion backstop neutralises it. */}
             <span
-              className={`absolute top-1/2 size-5 -translate-y-1/2 rounded-full transition-all ${
+              className={`absolute top-1/2 size-5 -translate-y-1/2 rounded-full transition-[left,background-color] duration-[160ms] ease-out ${
                 on ? "left-[22px] bg-foreground" : "left-0.5 bg-muted-foreground"
               }`}
             />
@@ -123,7 +132,7 @@ function ParamControlImpl({ param, value, onChange }: Props) {
                     type="button"
                     aria-pressed={active}
                     onClick={() => set(opt)}
-                    className={`rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${FOCUS} ${
+                    className={`touch-target rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${FOCUS} ${
                       active
                         ? "border-foreground/30 bg-foreground/10 text-foreground"
                         : "border-border bg-transparent text-muted-foreground hover:text-foreground"

@@ -23,7 +23,7 @@ import { useVideoExport } from "@/components/studio/use-video-export";
 const ACCEPT_ATTR = [...IMAGE_ACCEPT, ...VIDEO_ACCEPT].join(",");
 
 const GHOST_BTN =
-  "rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+  "touch-target rounded-md border border-border px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
 function humanize(id: string) {
   return id.replace(/-/g, " ");
@@ -83,6 +83,16 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   });
 
   const fileInput = useRef<HTMLInputElement>(null);
+  // A8 — drop settle: when dragging clears (a drop or drag-leave), play a single
+  // subtle scale dip on the stage chrome. `settleKey` bumps to re-trigger the
+  // CSS animation; `prevDragging` tracks the true→false edge. CSS-only motion,
+  // covered by the reduced-motion backstop in globals.css.
+  const prevDragging = useRef(false);
+  const [settleKey, setSettleKey] = useState(0);
+  useEffect(() => {
+    if (prevDragging.current && !dragging) setSettleKey((k) => k + 1);
+    prevDragging.current = dragging;
+  }, [dragging]);
   const reducedMotion = useReducedMotion();
   const noticeVariants = fadeRiseVariants(reducedMotion);
 
@@ -196,12 +206,12 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                   }}
                   aria-disabled={exportStatus === "working" || undefined}
                   aria-busy={exportStatus === "working" || undefined}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  className="touch-target inline-flex items-center gap-1.5 rounded-md border border-border bg-foreground/[0.06] px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] text-foreground transition-colors hover:bg-foreground/15 aria-disabled:text-muted-foreground aria-disabled:hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   {exportStatus === "working"
                     ? "Rendering…"
                     : exportStatus === "done"
-                      ? "Saved ✓"
+                      ? "Downloaded ✓"
                       : exportStatus === "error"
                         ? "Retry"
                         : "Download PNG"}
@@ -258,7 +268,9 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
                     <img
                       src={image!.url}
                       alt={`${image!.name}, original`}
-                      className="absolute inset-0 h-full w-full object-cover"
+                      // C3 — 1px inset outline so the "before" plate reads on the
+                      // same plane as the shader "after" layer.
+                      className="absolute inset-0 h-full w-full object-cover outline outline-1 -outline-offset-1 outline-white/10"
                     />
                   }
                   after={<ShaderView shader={shader} values={values} imageUrl={image?.url} />}
@@ -269,8 +281,24 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
             </PreviewBox>
           )}
 
-          {dragging && (
-            <div className="pointer-events-none absolute inset-3 rounded-lg border border-dashed border-foreground/40" />
+          {/* A8 — dashed drop overlay: always mounted, fades in (~120ms opacity)
+             on drag instead of popping. Chrome only — sits above, never over,
+             the live canvas. */}
+          <div
+            aria-hidden
+            className={`pointer-events-none absolute inset-3 rounded-md border border-dashed border-foreground/40 transition-opacity duration-[120ms] ${
+              dragging ? "opacity-100" : "opacity-0"
+            }`}
+          />
+          {/* A8 — drop settle: a brief chrome-only scale dip on drop (keyed so it
+             retriggers each drop). Never wraps the canvas, so the WebGL layer is
+             untouched. */}
+          {settleKey > 0 && (
+            <div
+              key={settleKey}
+              aria-hidden
+              className="animate-drop-settle pointer-events-none absolute inset-3 rounded-md ring-1 ring-inset ring-foreground/20"
+            />
           )}
         </div>
 
@@ -370,7 +398,7 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => voi
                 onChange(m === "photo" ? "video" : "photo");
               }
             }}
-            className={`rounded-[5px] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+            className={`touch-target rounded-[5px] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
               active ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -406,8 +434,11 @@ function PreviewBox({ ar, children }: { ar: number; children: React.ReactNode })
 
   return (
     <div ref={ref} className="flex h-full w-full items-center justify-center">
+      {/* C1 — concentric radius: the stage padding (p-3 sm:p-5) far exceeds the
+         card's outer radius, so the inner preview takes a tighter `rounded-md`
+         (not `rounded-lg`) to sit concentrically inside the shell. */}
       <div
-        className="relative overflow-hidden rounded-lg ring-1 ring-white/10"
+        className="relative overflow-hidden rounded-md ring-1 ring-white/10"
         style={{ width: box.w || "100%", height: box.h || "100%" }}
       >
         {children}

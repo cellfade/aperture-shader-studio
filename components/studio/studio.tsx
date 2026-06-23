@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { AnimatePresence, m } from "motion/react";
+import { MotionProvider } from "@/components/studio/motion-provider";
+import { fadeRiseVariants } from "@/lib/studio/motion";
+import { useReducedMotion } from "@/lib/studio/use-media-query";
 import { CompareSlider } from "@/components/compare-slider";
 import { ControlPanel } from "@/components/studio/control-panel";
 import { ShaderView } from "@/components/studio/shader-view";
@@ -79,6 +83,8 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
   });
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const reducedMotion = useReducedMotion();
+  const noticeVariants = fadeRiseVariants(reducedMotion);
 
   const stageOpen = mode === "video" && !!videoUrl && videoStageOpen;
   const showVideoDrop = mode === "video" && !videoUrl;
@@ -117,6 +123,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
     : "aspect-[var(--ar)] max-h-[62vh] min-h-[280px] lg:aspect-auto lg:h-[clamp(440px,72vh,760px)] lg:max-h-none lg:min-h-0";
 
   return (
+    <MotionProvider>
     <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_18px_50px_-30px_rgba(0,0,0,0.85)]">
       {/* Studio top bar */}
       <div className="flex flex-col gap-2 border-b border-border px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -128,9 +135,24 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
               {statusLabel}
               {statusDims && <span className="ms-2 text-muted-foreground">{statusDims}</span>}
             </span>
-            {notice && (
-              <span className="ms-2 truncate text-foreground/80">· {notice}</span>
-            )}
+            {/* A6: status/notice entrance — inline (not a floating toast) so it
+               stays minimal. Fade + 4px rise in (~180ms), soft fade out via
+               AnimatePresence. Keyed on the text so a new notice cross-animates.
+               Under reduced motion `noticeVariants` is opacity-only (hard cut). */}
+            <AnimatePresence mode="wait" initial={false}>
+              {notice && (
+                <m.span
+                  key={notice}
+                  variants={noticeVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  className="ms-2 truncate text-foreground/80"
+                >
+                  · {notice}
+                </m.span>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -303,6 +325,7 @@ export function Studio({ sampleSrc }: { sampleSrc: string }) {
         />
       )}
     </div>
+    </MotionProvider>
   );
 }
 
